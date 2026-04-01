@@ -53,6 +53,8 @@ def save_data(data):
 
     try:
 
+        data["server_time"]=time.time()
+
         with open(DATA_FILE,"w") as f:
 
             json.dump(data,f)
@@ -182,7 +184,6 @@ def debug():
 def build_speech():
 
     global last_data
-    global last_update
 
     if last_data is None:
 
@@ -202,21 +203,25 @@ def build_speech():
 
     wifi_text=interpret_wifi(wifi)
 
-    # TIEMPO REAL CORRECTO (SERVER TIME)
+    # TIEMPO REAL DESDE ÚLTIMO MQTT
 
-    elapsed=int(time.time()-last_update)
+    server_time=last_data.get("server_time",0)
 
-    if elapsed<0:
+    if server_time>0:
+
+        elapsed=int(time.time()-server_time)
+
+    else:
 
         elapsed=0
 
-    # TEXTO HUMANO
+    # TEXTO NATURAL
 
     if elapsed<60:
 
         time_text=f"Última lectura hace {elapsed} segundos."
 
-    elif elapsed<3600:
+    elif elapsed<300:
 
         mins=int(elapsed/60)
 
@@ -224,7 +229,7 @@ def build_speech():
 
     else:
 
-        time_text="No recibo datos recientes."
+        time_text="Advertencia. No recibo datos recientes."
 
     speech=f"Nivel {level} por ciento."
 
