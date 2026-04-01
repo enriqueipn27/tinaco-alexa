@@ -89,10 +89,8 @@ def mqtt_loop():
                 60
             )
 
-            # IMPORTANTE
             client.loop_start()
 
-            # mantener hilo vivo
             while True:
 
                 time.sleep(30)
@@ -124,7 +122,7 @@ def start_mqtt():
     print("MQTT thread iniciado")
 
 
-# iniciar MQTT cuando arranca worker
+# iniciar MQTT al arrancar worker
 start_mqtt()
 
 
@@ -154,6 +152,7 @@ def tinaco():
 
     try:
 
+        # GET debug
         if request.method=="GET":
 
             return jsonify({
@@ -166,55 +165,56 @@ def tinaco():
 
             })
 
-        req=request.json
+        # POST Alexa
+        req=request.get_json(force=True)
 
-        if not req:
+        print("Alexa request:",req)
 
-            speech="Sistema funcionando"
+        req_type=req.get(
+            "request",
+            {}
+        ).get(
+            "type",
+            ""
+        )
 
-        else:
+        if req_type=="LaunchRequest":
 
-            req_type=req.get(
-                "request",
-                {}
-            ).get(
-                "type",
-                ""
-            )
+            speech="Puedes preguntarme el nivel del tinaco"
 
-            if req_type=="LaunchRequest":
+        elif req_type=="IntentRequest":
 
-                speech="Puedes preguntarme el nivel del tinaco"
+            intent=req["request"]["intent"]["name"]
 
-            elif req_type=="IntentRequest":
+            print("Intent:",intent)
 
-                if last_data is None:
+            if last_data is None:
 
-                    speech="Aun no recibo datos"
-
-                else:
-
-                    level=last_data.get("level",0)
-
-                    pump=last_data.get("pump","OFF")
-
-                    level_text=interpret_level(level)
-
-                    speech=f"El nivel del tinaco es {level} por ciento."
-
-                    speech+=f" Estado {level_text}."
-
-                    if pump=="ON":
-
-                        speech+=" La bomba esta encendida."
-
-                    else:
-
-                        speech+=" La bomba esta apagada."
+                speech="Aun no recibo datos del tinaco"
 
             else:
 
-                speech="No entendi"
+                level=last_data.get("level",0)
+
+                pump=last_data.get("pump","OFF")
+
+                level_text=interpret_level(level)
+
+                speech=f"El nivel del tinaco es {level} por ciento."
+
+                speech+=f" Estado {level_text}."
+
+                if pump=="ON":
+
+                    speech+=" La bomba esta encendida."
+
+                else:
+
+                    speech+=" La bomba esta apagada."
+
+        else:
+
+            speech="Solicitud no reconocida"
 
         return jsonify({
 
@@ -238,7 +238,7 @@ def tinaco():
 
     except Exception as e:
 
-        print("Endpoint error:",e)
+        print("Alexa endpoint error:",e)
 
         return jsonify({
 
@@ -250,7 +250,7 @@ def tinaco():
 
                     "type":"PlainText",
 
-                    "text":"Error leyendo datos"
+                    "text":"Error interno del sistema"
 
                 },
 
