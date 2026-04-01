@@ -1,0 +1,1 @@
+web: gunicorn tinaco_alexa_bridge:app
