@@ -15,6 +15,7 @@ last_update=0
 
 app=Flask(__name__)
 
+
 def interpret_level(level):
 
     if level>=80:
@@ -67,7 +68,7 @@ def on_connect(client,userdata,flags,rc):
 
     else:
 
-        print("Error MQTT codigo:",rc)
+        print("Error conexion MQTT:",rc)
 
 
 def mqtt_loop():
@@ -78,7 +79,9 @@ def mqtt_loop():
 
             print("Intentando conectar MQTT...")
 
-            client=mqtt.Client(protocol=mqtt.MQTTv311)
+            client=mqtt.Client(
+                protocol=mqtt.MQTTv311
+            )
 
             client.on_connect=on_connect
             client.on_message=on_message
@@ -94,7 +97,12 @@ def mqtt_loop():
                 60
             )
 
-            client.loop_forever()
+            client.loop_start()
+
+            # mantener hilo vivo
+            while True:
+
+                time.sleep(15)
 
         except Exception as e:
 
@@ -105,7 +113,9 @@ def mqtt_loop():
 
 def start_mqtt():
 
-    thread=threading.Thread(target=mqtt_loop)
+    thread=threading.Thread(
+        target=mqtt_loop
+    )
 
     thread.daemon=True
 
@@ -124,7 +134,6 @@ def home():
     return "Tinaco Alexa bridge running"
 
 
-# Endpoint debug
 @app.route("/debug")
 def debug():
 
@@ -145,7 +154,7 @@ def tinaco():
 
     try:
 
-        # Permitir ver datos en navegador
+        # Permite ver estado desde navegador
         if request.method=="GET":
 
             return jsonify({
@@ -174,12 +183,10 @@ def tinaco():
                 ""
             )
 
-            # LaunchRequest
             if req_type=="LaunchRequest":
 
                 speech="Puedes preguntarme el nivel del tinaco"
 
-            # IntentRequest
             elif req_type=="IntentRequest":
 
                 if last_data is None:
