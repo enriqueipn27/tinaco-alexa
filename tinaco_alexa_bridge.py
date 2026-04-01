@@ -71,9 +71,20 @@ def on_message(client,userdata,msg):
 
 def on_connect(client,userdata,flags,rc):
 
-    print("MQTT conectado:",rc)
+    if rc==0:
 
-    client.subscribe(MQTT_TOPIC)
+        print("MQTT conectado")
+
+        client.subscribe(MQTT_TOPIC)
+
+    else:
+
+        print("MQTT error:",rc)
+
+
+def on_disconnect(client,userdata,rc):
+
+    print("MQTT desconectado")
 
 
 def mqtt_loop():
@@ -82,10 +93,27 @@ def mqtt_loop():
 
     client.on_connect=on_connect
     client.on_message=on_message
+    client.on_disconnect=on_disconnect
 
-    client.connect(MQTT_BROKER,1883,60)
+    while True:
 
-    client.loop_forever()
+        try:
+
+            print("MQTT connecting")
+
+            client.connect(MQTT_BROKER,1883,60)
+
+            while True:
+
+                client.loop(timeout=1.0)
+
+                time.sleep(0.5)
+
+        except Exception as e:
+
+            print("MQTT reconnect:",e)
+
+            time.sleep(5)
 
 
 def start_mqtt():
@@ -165,7 +193,6 @@ def tinaco():
         req_type=req.get("request",{}).get("type","")
 
 
-        # LaunchRequest
         if req_type=="LaunchRequest":
 
             speech=build_speech()
@@ -188,7 +215,6 @@ def tinaco():
             })
 
 
-        # IntentRequest
         if req_type=="IntentRequest":
 
             intent=req["request"]["intent"]["name"]
@@ -196,25 +222,18 @@ def tinaco():
             print("Intent:",intent)
 
 
-            # NivelIntent
             if intent=="NivelIntent":
 
                 speech=build_speech()
 
-
-            # Help
             elif intent=="AMAZON.HelpIntent":
 
                 speech="Puedes preguntarme el nivel del tinaco"
 
-
-            # Stop / Cancel
             elif intent=="AMAZON.StopIntent" or intent=="AMAZON.CancelIntent":
 
                 speech="Hasta luego"
 
-
-            # Fallback
             else:
 
                 speech=build_speech()
@@ -238,7 +257,6 @@ def tinaco():
             })
 
 
-        # Seguridad extra
         speech=build_speech()
 
         return jsonify({
