@@ -62,6 +62,8 @@ def on_connect(client,userdata,flags,rc):
 
     client.subscribe(MQTT_TOPIC)
 
+    print("Suscrito:",MQTT_TOPIC)
+
 
 def mqtt_loop():
 
@@ -69,6 +71,8 @@ def mqtt_loop():
 
     client.on_connect=on_connect
     client.on_message=on_message
+
+    print("Conectando MQTT")
 
     client.connect(MQTT_BROKER,1883,60)
 
@@ -114,31 +118,53 @@ def tinaco():
 
     try:
 
-        if last_data is None:
+        # Obtener request Alexa seguro
+        req=request.get_json(silent=True)
 
-            speech="Esperando datos del tinaco"
+        if req is None:
+            req={}
+
+        req_type=req.get(
+            "request",
+            {}
+        ).get(
+            "type",
+            ""
+        )
+
+        # LaunchRequest
+        if req_type=="LaunchRequest":
+
+            speech="Puedes preguntarme el nivel del tinaco"
 
         else:
 
-            level=last_data.get("level",0)
+            if last_data is None:
 
-            pump=last_data.get("pump","OFF")
-
-            level_text=interpret_level(level)
-
-            speech=f"Nivel {level} por ciento."
-
-            speech+=f" Estado {level_text}."
-
-            if pump=="ON":
-
-                speech+=" Bomba encendida."
+                speech="Esperando datos del tinaco"
 
             else:
 
-                speech+=" Bomba apagada."
+                level=last_data.get("level",0)
 
-        return jsonify({
+                pump=last_data.get("pump","OFF")
+
+                level_text=interpret_level(level)
+
+                speech=f"Nivel {level} por ciento."
+
+                speech+=f" Estado {level_text}."
+
+                if pump=="ON":
+
+                    speech+=" Bomba encendida."
+
+                else:
+
+                    speech+=" Bomba apagada."
+
+
+        response=jsonify({
 
             "version":"1.0",
 
@@ -158,11 +184,17 @@ def tinaco():
 
         })
 
+        # Importante para Alexa
+        response.headers["Content-Type"]="application/json"
+
+        return response,200
+
+
     except Exception as e:
 
         print("Error:",e)
 
-        return jsonify({
+        response=jsonify({
 
             "version":"1.0",
 
@@ -181,6 +213,10 @@ def tinaco():
             }
 
         })
+
+        response.headers["Content-Type"]="application/json"
+
+        return response,200
 
 
 if __name__=="__main__":
