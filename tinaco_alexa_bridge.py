@@ -60,7 +60,6 @@ def on_message(client,userdata,msg):
             return
 
         last_data=data
-
         last_update=time.time()
 
         print("MQTT:",data)
@@ -115,7 +114,6 @@ def debug():
     return jsonify({
 
         "last_data":last_data,
-
         "last_update":last_update
 
     })
@@ -131,23 +129,17 @@ def build_speech():
         return "Aun no recibo datos del tinaco"
 
     level=last_data.get("level",0)
-
     pump=last_data.get("pump","OFF")
-
     wifi=last_data.get("w",-100)
 
     level_text=interpret_level(level)
-
     wifi_text=interpret_wifi(wifi)
 
     elapsed=int(time.time()-last_update)
 
     speech=f"Nivel {level} por ciento."
-
     speech+=f" Estado {level_text}."
-
     speech+=f" Última lectura hace {elapsed} segundos."
-
     speech+=f" {wifi_text}."
 
     if pump=="ON":
@@ -173,7 +165,7 @@ def tinaco():
         req_type=req.get("request",{}).get("type","")
 
 
-        # LaunchRequest → RESPUESTA DIRECTA
+        # LaunchRequest
         if req_type=="LaunchRequest":
 
             speech=build_speech()
@@ -185,11 +177,8 @@ def tinaco():
                 "response":{
 
                     "outputSpeech":{
-
                         "type":"PlainText",
-
                         "text":speech
-
                     },
 
                     "shouldEndSession":True
@@ -202,7 +191,34 @@ def tinaco():
         # IntentRequest
         if req_type=="IntentRequest":
 
-            speech=build_speech()
+            intent=req["request"]["intent"]["name"]
+
+            print("Intent:",intent)
+
+
+            # NivelIntent
+            if intent=="NivelIntent":
+
+                speech=build_speech()
+
+
+            # Help
+            elif intent=="AMAZON.HelpIntent":
+
+                speech="Puedes preguntarme el nivel del tinaco"
+
+
+            # Stop / Cancel
+            elif intent=="AMAZON.StopIntent" or intent=="AMAZON.CancelIntent":
+
+                speech="Hasta luego"
+
+
+            # Fallback
+            else:
+
+                speech=build_speech()
+
 
             return jsonify({
 
@@ -211,11 +227,8 @@ def tinaco():
                 "response":{
 
                     "outputSpeech":{
-
                         "type":"PlainText",
-
                         "text":speech
-
                     },
 
                     "shouldEndSession":True
@@ -225,6 +238,9 @@ def tinaco():
             })
 
 
+        # Seguridad extra
+        speech=build_speech()
+
         return jsonify({
 
             "version":"1.0",
@@ -232,11 +248,8 @@ def tinaco():
             "response":{
 
                 "outputSpeech":{
-
                     "type":"PlainText",
-
-                    "text":"No entendí la solicitud"
-
+                    "text":speech
                 },
 
                 "shouldEndSession":True
@@ -257,11 +270,8 @@ def tinaco():
             "response":{
 
                 "outputSpeech":{
-
                     "type":"PlainText",
-
                     "text":"Error interno"
-
                 },
 
                 "shouldEndSession":True
@@ -276,7 +286,6 @@ if __name__=="__main__":
     app.run(
 
         host="0.0.0.0",
-
         port=int(os.environ.get("PORT",5000))
 
     )
