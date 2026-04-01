@@ -12,6 +12,7 @@ MQTT_TOPIC="tinaco/enrique/status"
 
 last_data=None
 last_update=0
+mqtt_started=False
 
 app=Flask(__name__)
 
@@ -88,13 +89,9 @@ def build_speech():
 
         speech+=" Bomba apagada."
 
-    if age>5:
+    speech+=f" Última lectura hace {age} segundos."
 
-        speech+=f" Última lectura hace {age} segundos."
-
-    if wifi_text!="":
-
-        speech+=f" {wifi_text}."
+    speech+=f" {wifi_text}."
 
     return speech
 
@@ -108,14 +105,11 @@ def on_message(client,userdata,msg):
 
         data=json.loads(msg.payload.decode())
 
-        if "level" not in data:
-            return
-
         last_data=data
 
         last_update=time.time()
 
-        print("MQTT:",data)
+        print("MQTT recibido:",data)
 
     except Exception as e:
 
@@ -128,20 +122,41 @@ def on_connect(client,userdata,flags,rc):
 
     client.subscribe(MQTT_TOPIC)
 
+    print("Suscrito a:",MQTT_TOPIC)
+
 
 def mqtt_loop():
 
-    client=mqtt.Client()
+    while True:
 
-    client.on_connect=on_connect
-    client.on_message=on_message
+        try:
 
-    client.connect(MQTT_BROKER,1883,60)
+            print("Intentando conectar MQTT...")
 
-    client.loop_forever()
+            client=mqtt.Client()
+
+            client.on_connect=on_connect
+            client.on_message=on_message
+
+            client.connect(MQTT_BROKER,1883,60)
+
+            client.loop_forever()
+
+        except Exception as e:
+
+            print("MQTT reconectando:",e)
+
+            time.sleep(5)
 
 
 def start_mqtt():
+
+    global mqtt_started
+
+    if mqtt_started:
+        return
+
+    mqtt_started=True
 
     thread=threading.Thread(target=mqtt_loop)
 
@@ -149,7 +164,7 @@ def start_mqtt():
 
     thread.start()
 
-    print("MQTT iniciado")
+    print("MQTT thread iniciado")
 
 
 start_mqtt()
@@ -173,7 +188,7 @@ def debug():
     })
 
 
-@app.route("/tinaco",methods=["POST","GET"])
+@app.route("/tinaco",methods=["POST"])
 def tinaco():
 
     try:
@@ -182,63 +197,7 @@ def tinaco():
 
         print("Alexa:",req)
 
-        req_type=req.get("request",{}).get("type","")
-
-        # LaunchRequest (RESPUESTA INMEDIATA)
-        if req_type=="LaunchRequest":
-
-            speech=build_speech()
-
-            return jsonify({
-
-                "version":"1.0",
-
-                "response":{
-
-                    "outputSpeech":{
-
-                        "type":"PlainText",
-
-                        "text":speech
-
-                    },
-
-                    "shouldEndSession":True
-
-                }
-
-            })
-
-
-        # IntentRequest
-        if req_type=="IntentRequest":
-
-            intent=req["request"]["intent"]["name"]
-
-            print("Intent:",intent)
-
-            speech=build_speech()
-
-            return jsonify({
-
-                "version":"1.0",
-
-                "response":{
-
-                    "outputSpeech":{
-
-                        "type":"PlainText",
-
-                        "text":speech
-
-                    },
-
-                    "shouldEndSession":True
-
-                }
-
-            })
-
+        speech=build_speech()
 
         return jsonify({
 
@@ -250,7 +209,7 @@ def tinaco():
 
                     "type":"PlainText",
 
-                    "text":"No entendí la solicitud"
+                    "text":speech
 
                 },
 
@@ -259,7 +218,6 @@ def tinaco():
             }
 
         })
-
 
     except Exception as e:
 
