@@ -12,6 +12,7 @@ MQTT_TOPIC="tinaco/enrique/status"
 
 last_data=None
 last_update=0
+mqtt_started=False
 
 app=Flask(__name__)
 
@@ -66,10 +67,6 @@ def on_connect(client,userdata,flags,rc):
 
         print("Suscrito a:",MQTT_TOPIC)
 
-    else:
-
-        print("Error conexion MQTT:",rc)
-
 
 def mqtt_loop():
 
@@ -97,12 +94,7 @@ def mqtt_loop():
                 60
             )
 
-            client.loop_start()
-
-            # mantener hilo vivo
-            while True:
-
-                time.sleep(15)
+            client.loop_forever()
 
         except Exception as e:
 
@@ -112,6 +104,13 @@ def mqtt_loop():
 
 
 def start_mqtt():
+
+    global mqtt_started
+
+    if mqtt_started:
+        return
+
+    mqtt_started=True
 
     thread=threading.Thread(
         target=mqtt_loop
@@ -124,8 +123,10 @@ def start_mqtt():
     print("MQTT thread iniciado")
 
 
-# iniciar MQTT
-start_mqtt()
+@app.before_first_request
+def init_mqtt():
+
+    start_mqtt()
 
 
 @app.route("/")
@@ -154,7 +155,6 @@ def tinaco():
 
     try:
 
-        # Permite ver estado desde navegador
         if request.method=="GET":
 
             return jsonify({
@@ -273,6 +273,8 @@ def tinaco():
 
 
 if __name__=="__main__":
+
+    start_mqtt()
 
     app.run(
 
