@@ -33,6 +33,72 @@ def interpret_level(level):
     return "nivel critico"
 
 
+def interpret_wifi(rssi):
+
+    try:
+
+        rssi=int(rssi)
+
+        if rssi>=-60:
+            return "señal wifi excelente"
+
+        if rssi>=-70:
+            return "señal wifi buena"
+
+        if rssi>=-80:
+            return "señal wifi regular"
+
+        return "señal wifi débil"
+
+    except:
+
+        return ""
+
+
+def build_speech():
+
+    global last_data
+    global last_update
+
+    if last_data is None:
+
+        return "Aún no recibo datos del tinaco"
+
+    level=last_data.get("level",0)
+
+    pump=last_data.get("pump","OFF")
+
+    wifi=last_data.get("w",-100)
+
+    level_text=interpret_level(level)
+
+    wifi_text=interpret_wifi(wifi)
+
+    age=int(time.time()-last_update)
+
+    speech=f"Nivel {level} por ciento."
+
+    speech+=f" Estado {level_text}."
+
+    if pump=="ON":
+
+        speech+=" Bomba encendida."
+
+    else:
+
+        speech+=" Bomba apagada."
+
+    if age>5:
+
+        speech+=f" Última lectura hace {age} segundos."
+
+    if wifi_text!="":
+
+        speech+=f" {wifi_text}."
+
+    return speech
+
+
 def on_message(client,userdata,msg):
 
     global last_data
@@ -110,8 +176,6 @@ def debug():
 @app.route("/tinaco",methods=["POST","GET"])
 def tinaco():
 
-    global last_data
-
     try:
 
         req=request.get_json(force=True)
@@ -120,62 +184,10 @@ def tinaco():
 
         req_type=req.get("request",{}).get("type","")
 
-        # LaunchRequest
+        # LaunchRequest (RESPUESTA INMEDIATA)
         if req_type=="LaunchRequest":
 
-            speech="Puedes preguntarme el nivel del tinaco"
-
-            return jsonify({
-
-                "version":"1.0",
-
-                "response":{
-
-                    "outputSpeech":{
-
-                        "type":"PlainText",
-
-                        "text":speech
-
-                    },
-
-                    "shouldEndSession":False
-
-                }
-
-            })
-
-
-        # IntentRequest
-        if req_type=="IntentRequest":
-
-            intent=req["request"]["intent"]["name"]
-
-            print("Intent:",intent)
-
-            if last_data is None:
-
-                speech="Aun no recibo datos del tinaco"
-
-            else:
-
-                level=last_data.get("level",0)
-
-                pump=last_data.get("pump","OFF")
-
-                level_text=interpret_level(level)
-
-                speech=f"El nivel del tinaco es {level} por ciento."
-
-                speech+=f" Estado {level_text}."
-
-                if pump=="ON":
-
-                    speech+=" La bomba esta encendida."
-
-                else:
-
-                    speech+=" La bomba esta apagada."
+            speech=build_speech()
 
             return jsonify({
 
@@ -198,7 +210,36 @@ def tinaco():
             })
 
 
-        # fallback
+        # IntentRequest
+        if req_type=="IntentRequest":
+
+            intent=req["request"]["intent"]["name"]
+
+            print("Intent:",intent)
+
+            speech=build_speech()
+
+            return jsonify({
+
+                "version":"1.0",
+
+                "response":{
+
+                    "outputSpeech":{
+
+                        "type":"PlainText",
+
+                        "text":speech
+
+                    },
+
+                    "shouldEndSession":True
+
+                }
+
+            })
+
+
         return jsonify({
 
             "version":"1.0",
@@ -209,7 +250,7 @@ def tinaco():
 
                     "type":"PlainText",
 
-                    "text":"No entendi la solicitud"
+                    "text":"No entendí la solicitud"
 
                 },
 
