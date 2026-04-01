@@ -181,6 +181,7 @@ def debug():
 def build_speech():
 
     global last_data
+    global last_update
 
     if last_data is None:
 
@@ -188,7 +189,7 @@ def build_speech():
 
         if last_data is None:
 
-            return "Aun no recibo datos del tinaco"
+            return "Aún no recibo datos del tinaco"
 
     level=last_data.get("level",0)
     pump=last_data.get("pump","OFF")
@@ -197,11 +198,10 @@ def build_speech():
     level_text=interpret_level(level)
     wifi_text=interpret_wifi(wifi)
 
-    device_time=last_data.get("t",0)
+    # TIEMPO REAL CORRECTO
+    if last_update>0:
 
-    if device_time>0:
-
-        elapsed=int(time.time()-device_time)
+        elapsed=int(time.time()-last_update)
 
     else:
 
