@@ -4,6 +4,8 @@ from flask import Flask,jsonify,request
 import paho.mqtt.client as mqtt
 import json
 import time
+import threading
+import os
 
 MQTT_BROKER="broker.hivemq.com"
 MQTT_TOPIC="tinaco/enrique/status"
@@ -50,25 +52,55 @@ def on_message(client,userdata,msg):
 
     except Exception as e:
 
-        print("JSON error",e)
+        print("JSON error:",e)
 
 
 def on_connect(client,userdata,flags,rc):
 
-    print("MQTT conectado")
+    print("MQTT conectado codigo:",rc)
 
     client.subscribe(MQTT_TOPIC)
 
+    print("Suscrito a:",MQTT_TOPIC)
 
-client=mqtt.Client()
 
-client.on_connect=on_connect
+def mqtt_loop():
 
-client.on_message=on_message
+    while True:
 
-client.connect(MQTT_BROKER,1883,60)
+        try:
 
-client.loop_start()
+            client=mqtt.Client()
+
+            client.on_connect=on_connect
+            client.on_message=on_message
+
+            client.reconnect_delay_set(min_delay=1,max_delay=30)
+
+            client.connect(MQTT_BROKER,1883,60)
+
+            client.loop_forever()
+
+        except Exception as e:
+
+            print("MQTT reconectando:",e)
+
+            time.sleep(5)
+
+
+def start_mqtt():
+
+    thread=threading.Thread(target=mqtt_loop)
+
+    thread.daemon=True
+
+    thread.start()
+
+    print("MQTT thread iniciado")
+
+
+# Iniciar MQTT dentro del worker
+start_mqtt()
 
 
 @app.route("/")
@@ -79,7 +111,6 @@ def home():
 
 
 @app.route("/tinaco",methods=["POST","GET"])
-
 def tinaco():
 
     global last_data
@@ -89,7 +120,7 @@ def tinaco():
 
         if last_data is None:
 
-            speech="Esperando datos del tinaco"
+            speech="Conectando con el tinaco. Esperando primera lectura."
 
         else:
 
@@ -97,7 +128,13 @@ def tinaco():
 
             pump=last_data.get("pump","OFF")
 
-            age=int(time.time()-last_update)
+            if last_update>0:
+
+                age=int(time.time()-last_update)
+
+            else:
+
+                age=0
 
             level_text=interpret_level(level)
 
@@ -113,7 +150,7 @@ def tinaco():
 
                 speech+=" La bomba esta apagada."
 
-            if age>60:
+            if age>90:
 
                 speech+=f" Ultima actualizacion hace {age} segundos."
 
@@ -162,3 +199,14 @@ def tinaco():
             }
 
         })
+
+
+if __name__=="__main__":
+
+    app.run(
+
+        host="0.0.0.0",
+
+        port=int(os.environ.get("PORT",5000))
+
+    )
