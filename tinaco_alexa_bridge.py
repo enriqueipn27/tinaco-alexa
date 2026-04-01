@@ -53,8 +53,6 @@ def save_data(data):
 
     try:
 
-        data["server_time"]=time.time()
-
         with open(DATA_FILE,"w") as f:
 
             json.dump(data,f)
@@ -90,6 +88,7 @@ def on_message(client,userdata,msg):
             return
 
         last_data=data
+
         last_update=time.time()
 
         save_data(data)
@@ -194,20 +193,45 @@ def build_speech():
             return "Aún no recibo datos del tinaco"
 
     level=last_data.get("level",0)
+
     pump=last_data.get("pump","OFF")
+
     wifi=last_data.get("w",-100)
 
     level_text=interpret_level(level)
+
     wifi_text=interpret_wifi(wifi)
 
-    # TIEMPO REAL CORRECTO
-    
-    sensor_time=last_data.get("t",time.time())
-    elapsed=int(time.time()-sensor_time)
+    # TIEMPO REAL CORRECTO (SERVER TIME)
+
+    elapsed=int(time.time()-last_update)
+
+    if elapsed<0:
+
+        elapsed=0
+
+    # TEXTO HUMANO
+
+    if elapsed<60:
+
+        time_text=f"Última lectura hace {elapsed} segundos."
+
+    elif elapsed<3600:
+
+        mins=int(elapsed/60)
+
+        time_text=f"Última lectura hace {mins} minutos."
+
+    else:
+
+        time_text="No recibo datos recientes."
 
     speech=f"Nivel {level} por ciento."
+
     speech+=f" Estado {level_text}."
-    speech+=f" Última lectura hace {elapsed} segundos."
+
+    speech+=f" {time_text}"
+
     speech+=f" {wifi_text}."
 
     if pump=="ON":
@@ -344,6 +368,7 @@ if __name__=="__main__":
     app.run(
 
         host="0.0.0.0",
+
         port=int(os.environ.get("PORT",5000))
 
     )
