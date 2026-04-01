@@ -89,7 +89,13 @@ def mqtt_loop():
                 60
             )
 
-            client.loop_forever()
+            # IMPORTANTE
+            client.loop_start()
+
+            # mantener hilo vivo
+            while True:
+
+                time.sleep(30)
 
         except Exception as e:
 
@@ -99,6 +105,13 @@ def mqtt_loop():
 
 
 def start_mqtt():
+
+    global mqtt_started
+
+    if mqtt_started:
+        return
+
+    mqtt_started=True
 
     thread=threading.Thread(
         target=mqtt_loop
@@ -111,12 +124,8 @@ def start_mqtt():
     print("MQTT thread iniciado")
 
 
-# INICIO MQTT AL ARRANCAR WORKER
-if not mqtt_started:
-
-    start_mqtt()
-
-    mqtt_started=True
+# iniciar MQTT cuando arranca worker
+start_mqtt()
 
 
 @app.route("/")
