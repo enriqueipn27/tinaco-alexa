@@ -46,7 +46,6 @@ def on_message(client,userdata,msg):
             return
 
         last_data=data
-
         last_update=time.time()
 
         print("MQTT:",data)
@@ -60,23 +59,33 @@ def on_connect(client,userdata,flags,rc):
 
     print("MQTT conectado:",rc)
 
-    client.subscribe(MQTT_TOPIC)
+    if rc==0:
 
-    print("Suscrito:",MQTT_TOPIC)
+        client.subscribe(MQTT_TOPIC)
+
+        print("Suscrito:",MQTT_TOPIC)
 
 
 def mqtt_loop():
 
-    client=mqtt.Client()
+    while True:
 
-    client.on_connect=on_connect
-    client.on_message=on_message
+        try:
 
-    print("Conectando MQTT")
+            client=mqtt.Client()
 
-    client.connect(MQTT_BROKER,1883,60)
+            client.on_connect=on_connect
+            client.on_message=on_message
 
-    client.loop_forever()
+            client.connect(MQTT_BROKER,1883,60)
+
+            client.loop_forever()
+
+        except Exception as e:
+
+            print("Reconectando MQTT:",e)
+
+            time.sleep(5)
 
 
 def start_mqtt():
@@ -91,6 +100,29 @@ def start_mqtt():
 
 
 start_mqtt()
+
+
+def alexa_response(text):
+
+    return {
+
+        "version":"1.0",
+
+        "response":{
+
+            "outputSpeech":{
+
+                "type":"PlainText",
+
+                "text":text
+
+            },
+
+            "shouldEndSession":True
+
+        }
+
+    }
 
 
 @app.route("/")
@@ -111,112 +143,92 @@ def debug():
     })
 
 
-@app.route("/tinaco",methods=["POST","GET"])
+@app.route("/tinaco",methods=["POST"])
 def tinaco():
 
     global last_data
 
     try:
 
-        # Obtener request Alexa seguro
-        req=request.get_json(silent=True)
+        req=request.get_json(force=True)
 
-        if req is None:
-            req={}
+        print("Alexa:",req)
 
-        req_type=req.get(
-            "request",
-            {}
-        ).get(
-            "type",
-            ""
-        )
+        req_type=req["request"]["type"]
 
         # LaunchRequest
         if req_type=="LaunchRequest":
 
-            speech="Puedes preguntarme el nivel del tinaco"
+            return jsonify(
 
-        else:
+                alexa_response(
+                    "Puedes preguntarme el nivel del tinaco"
+                )
+
+            )
+
+        # IntentRequest
+        if req_type=="IntentRequest":
+
+            intent=req["request"]["intent"]["name"]
+
+            print("Intent:",intent)
 
             if last_data is None:
 
-                speech="Esperando datos del tinaco"
+                return jsonify(
+
+                    alexa_response(
+                        "Aun no recibo datos del tinaco"
+                    )
+
+                )
+
+            level=last_data.get("level",0)
+
+            pump=last_data.get("pump","OFF")
+
+            level_text=interpret_level(level)
+
+            speech=f"El nivel del tinaco es {level} por ciento."
+
+            speech+=f" Estado {level_text}."
+
+            if pump=="ON":
+
+                speech+=" La bomba esta encendida."
 
             else:
 
-                level=last_data.get("level",0)
+                speech+=" La bomba esta apagada."
 
-                pump=last_data.get("pump","OFF")
+            return jsonify(
 
-                level_text=interpret_level(level)
+                alexa_response(
+                    speech
+                )
 
-                speech=f"Nivel {level} por ciento."
+            )
 
-                speech+=f" Estado {level_text}."
+        return jsonify(
 
-                if pump=="ON":
+            alexa_response(
+                "Solicitud no reconocida"
+            )
 
-                    speech+=" Bomba encendida."
-
-                else:
-
-                    speech+=" Bomba apagada."
-
-
-        response=jsonify({
-
-            "version":"1.0",
-
-            "response":{
-
-                "outputSpeech":{
-
-                    "type":"PlainText",
-
-                    "text":speech
-
-                },
-
-                "shouldEndSession":True
-
-            }
-
-        })
-
-        # Importante para Alexa
-        response.headers["Content-Type"]="application/json"
-
-        return response,200
-
+        )
 
     except Exception as e:
 
-        print("Error:",e)
+        print("Alexa error:",e)
 
-        response=jsonify({
+        return jsonify(
 
-            "version":"1.0",
+            alexa_response(
+                "Error interno"
+            )
 
-            "response":{
-
-                "outputSpeech":{
-
-                    "type":"PlainText",
-
-                    "text":"Error"
-
-                },
-
-                "shouldEndSession":True
-
-            }
-
-        })
-
-        response.headers["Content-Type"]="application/json"
-
-        return response,200
+        )
 
 
 if __name__=="__main__":
