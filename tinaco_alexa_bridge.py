@@ -99,15 +99,26 @@ def start_mqtt():
     print("MQTT thread iniciado")
 
 
-# Iniciar MQTT dentro del worker
 start_mqtt()
 
 
 @app.route("/")
-
 def home():
 
     return "Tinaco Alexa bridge running"
+
+
+# Endpoint debug (MUY útil)
+@app.route("/debug")
+def debug():
+
+    return jsonify({
+
+        "last_data":last_data,
+
+        "last_update":last_update
+
+    })
 
 
 @app.route("/tinaco",methods=["POST","GET"])
@@ -118,41 +129,70 @@ def tinaco():
 
     try:
 
-        if last_data is None:
+        # Permitir prueba navegador
+        if request.method=="GET":
 
-            speech="Conectando con el tinaco. Esperando primera lectura."
+            return jsonify({
+
+                "status":"running",
+
+                "last_data":last_data,
+
+                "last_update":last_update
+
+            })
+
+        req=request.json
+
+        if not req:
+
+            speech="Sistema funcionando correctamente"
 
         else:
 
-            level=last_data.get("level",0)
+            req_type=req.get("request",{}).get("type","")
 
-            pump=last_data.get("pump","OFF")
+            # LaunchRequest (MUY IMPORTANTE)
+            if req_type=="LaunchRequest":
 
-            if last_update>0:
+                speech="Puedes preguntarme el nivel del tinaco"
 
-                age=int(time.time()-last_update)
+            # IntentRequest
+            elif req_type=="IntentRequest":
+
+                if last_data is None:
+
+                    speech="Aun no recibo datos del tinaco"
+
+                else:
+
+                    level=last_data.get("level",0)
+
+                    pump=last_data.get("pump","OFF")
+
+                    age=int(time.time()-last_update)
+
+                    level_text=interpret_level(level)
+
+                    speech=f"El nivel del tinaco es {level} por ciento."
+
+                    speech+=f" Estado {level_text}."
+
+                    if pump=="ON":
+
+                        speech+=" La bomba esta encendida."
+
+                    else:
+
+                        speech+=" La bomba esta apagada."
+
+                    if age>90:
+
+                        speech+=f" Ultima actualizacion hace {age} segundos."
 
             else:
 
-                age=0
-
-            level_text=interpret_level(level)
-
-            speech=f"El nivel del tinaco es {level} por ciento."
-
-            speech+=f" Estado {level_text}."
-
-            if pump=="ON":
-
-                speech+=" La bomba esta encendida."
-
-            else:
-
-                speech+=" La bomba esta apagada."
-
-            if age>90:
-
-                speech+=f" Ultima actualizacion hace {age} segundos."
+                speech="No entendi la solicitud"
 
         response={
 
