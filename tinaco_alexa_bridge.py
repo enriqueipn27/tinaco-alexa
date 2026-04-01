@@ -1,8 +1,152 @@
-@app.route("/tinaco",methods=["POST","GET"])
-def tinaco():
+# -*- coding: utf-8 -*-
+
+from flask import Flask,jsonify,request
+import paho.mqtt.client as mqtt
+import json
+import time
+import threading
+import os
+
+MQTT_BROKER="broker.hivemq.com"
+MQTT_TOPIC="tinaco/enrique/status"
+
+last_data=None
+last_update=0
+
+app=Flask(__name__)
+
+
+def interpret_level(level):
+
+    if level>=80:
+        return "casi lleno"
+
+    if level>=60:
+        return "nivel alto"
+
+    if level>=40:
+        return "nivel medio"
+
+    if level>=20:
+        return "nivel bajo"
+
+    return "nivel critico"
+
+
+def on_message(client,userdata,msg):
 
     global last_data
     global last_update
+
+    try:
+
+        data=json.loads(msg.payload.decode())
+
+        if "level" not in data:
+            return
+
+        last_data=data
+        last_update=time.time()
+
+        print("MQTT:",data)
+
+    except Exception as e:
+
+        print("JSON error:",e)
+
+
+def on_connect(client,userdata,flags,rc):
+
+    print("MQTT conectado:",rc)
+
+    if rc==0:
+
+        client.subscribe(MQTT_TOPIC)
+
+        print("Suscrito:",MQTT_TOPIC)
+
+
+def mqtt_loop():
+
+    while True:
+
+        try:
+
+            client=mqtt.Client()
+
+            client.on_connect=on_connect
+            client.on_message=on_message
+
+            client.connect(MQTT_BROKER,1883,60)
+
+            client.loop_forever()
+
+        except Exception as e:
+
+            print("Reconectando MQTT:",e)
+
+            time.sleep(5)
+
+
+def start_mqtt():
+
+    thread=threading.Thread(target=mqtt_loop)
+
+    thread.daemon=True
+
+    thread.start()
+
+    print("MQTT iniciado")
+
+
+start_mqtt()
+
+
+def alexa_response(text):
+
+    return {
+
+        "version":"1.0",
+
+        "response":{
+
+            "outputSpeech":{
+
+                "type":"PlainText",
+
+                "text":text
+
+            },
+
+            "shouldEndSession":True
+
+        }
+
+    }
+
+
+@app.route("/")
+def home():
+
+    return "Tinaco Alexa bridge running"
+
+
+@app.route("/debug")
+def debug():
+
+    return jsonify({
+
+        "last_data":last_data,
+
+        "last_update":last_update
+
+    })
+
+
+@app.route("/tinaco",methods=["POST"])
+def tinaco():
+
+    global last_data
 
     try:
 
@@ -10,158 +154,89 @@ def tinaco():
 
         print("Alexa:",req)
 
-        req_type=req.get("request",{}).get("type","")
+        req_type=req["request"]["type"]
 
-        def wifi_text(rssi):
+        # LaunchRequest
+        if req_type=="LaunchRequest":
 
-            try:
+            return jsonify(
 
-                rssi=int(rssi)
+                alexa_response(
+                    "Puedes preguntarme el nivel del tinaco"
+                )
 
-                if rssi>=-60:
-                    return "Señal wifi excelente."
+            )
 
-                if rssi>=-70:
-                    return "Señal wifi buena."
+        # IntentRequest
+        if req_type=="IntentRequest":
 
-                if rssi>=-80:
-                    return "Señal wifi regular."
+            intent=req["request"]["intent"]["name"]
 
-                return "Señal wifi débil."
-
-            except:
-
-                return ""
-
-
-        def build_speech():
+            print("Intent:",intent)
 
             if last_data is None:
 
-                return "Aun no recibo datos del tinaco"
+                return jsonify(
+
+                    alexa_response(
+                        "Aun no recibo datos del tinaco"
+                    )
+
+                )
 
             level=last_data.get("level",0)
 
             pump=last_data.get("pump","OFF")
 
-            wifi=last_data.get("w",-100)
-
             level_text=interpret_level(level)
 
-            age=int(time.time()-last_update)
-
-            speech=f"Nivel {level} por ciento."
+            speech=f"El nivel del tinaco es {level} por ciento."
 
             speech+=f" Estado {level_text}."
 
             if pump=="ON":
 
-                speech+=" Bomba encendida."
+                speech+=" La bomba esta encendida."
 
             else:
 
-                speech+=" Bomba apagada."
+                speech+=" La bomba esta apagada."
 
-            speech+=f" Última lectura hace {age} segundos."
+            return jsonify(
 
-            speech+=wifi_text(wifi)
+                alexa_response(
+                    speech
+                )
 
-            return speech
+            )
 
+        return jsonify(
 
-        # LaunchRequest → RESPUESTA INMEDIATA
-        if req_type=="LaunchRequest":
+            alexa_response(
+                "Solicitud no reconocida"
+            )
 
-            speech=build_speech()
-
-            return jsonify({
-
-                "version":"1.0",
-
-                "response":{
-
-                    "outputSpeech":{
-
-                        "type":"PlainText",
-
-                        "text":speech
-
-                    },
-
-                    "shouldEndSession":True
-
-                }
-
-            })
-
-
-        # IntentRequest
-        if req_type=="IntentRequest":
-
-            speech=build_speech()
-
-            return jsonify({
-
-                "version":"1.0",
-
-                "response":{
-
-                    "outputSpeech":{
-
-                        "type":"PlainText",
-
-                        "text":speech
-
-                    },
-
-                    "shouldEndSession":True
-
-                }
-
-            })
-
-
-        return jsonify({
-
-            "version":"1.0",
-
-            "response":{
-
-                "outputSpeech":{
-
-                    "type":"PlainText",
-
-                    "text":"No entendi la solicitud"
-
-                },
-
-                "shouldEndSession":True
-
-            }
-
-        })
-
+        )
 
     except Exception as e:
 
-        print("Error:",e)
+        print("Alexa error:",e)
 
-        return jsonify({
+        return jsonify(
 
-            "version":"1.0",
+            alexa_response(
+                "Error interno"
+            )
 
-            "response":{
+        )
 
-                "outputSpeech":{
 
-                    "type":"PlainText",
+if __name__=="__main__":
 
-                    "text":"Error interno"
+    app.run(
 
-                },
+        host="0.0.0.0",
 
-                "shouldEndSession":True
+        port=int(os.environ.get("PORT",5000))
 
-            }
-
-        })
+    )
