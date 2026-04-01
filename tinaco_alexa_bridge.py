@@ -46,6 +46,7 @@ def on_message(client,userdata,msg):
             return
 
         last_data=data
+
         last_update=time.time()
 
         print("MQTT:",data)
@@ -59,33 +60,19 @@ def on_connect(client,userdata,flags,rc):
 
     print("MQTT conectado:",rc)
 
-    if rc==0:
-
-        client.subscribe(MQTT_TOPIC)
-
-        print("Suscrito:",MQTT_TOPIC)
+    client.subscribe(MQTT_TOPIC)
 
 
 def mqtt_loop():
 
-    while True:
+    client=mqtt.Client()
 
-        try:
+    client.on_connect=on_connect
+    client.on_message=on_message
 
-            client=mqtt.Client()
+    client.connect(MQTT_BROKER,1883,60)
 
-            client.on_connect=on_connect
-            client.on_message=on_message
-
-            client.connect(MQTT_BROKER,1883,60)
-
-            client.loop_forever()
-
-        except Exception as e:
-
-            print("Reconectando MQTT:",e)
-
-            time.sleep(5)
+    client.loop_forever()
 
 
 def start_mqtt():
@@ -100,29 +87,6 @@ def start_mqtt():
 
 
 start_mqtt()
-
-
-def alexa_response(text):
-
-    return {
-
-        "version":"1.0",
-
-        "response":{
-
-            "outputSpeech":{
-
-                "type":"PlainText",
-
-                "text":text
-
-            },
-
-            "shouldEndSession":True
-
-        }
-
-    }
 
 
 @app.route("/")
@@ -143,7 +107,7 @@ def debug():
     })
 
 
-@app.route("/tinaco",methods=["POST"])
+@app.route("/tinaco",methods=["POST","GET"])
 def tinaco():
 
     global last_data
@@ -154,18 +118,33 @@ def tinaco():
 
         print("Alexa:",req)
 
-        req_type=req["request"]["type"]
+        req_type=req.get("request",{}).get("type","")
 
         # LaunchRequest
         if req_type=="LaunchRequest":
 
-            return jsonify(
+            speech="Puedes preguntarme el nivel del tinaco"
 
-                alexa_response(
-                    "Puedes preguntarme el nivel del tinaco"
-                )
+            return jsonify({
 
-            )
+                "version":"1.0",
+
+                "response":{
+
+                    "outputSpeech":{
+
+                        "type":"PlainText",
+
+                        "text":speech
+
+                    },
+
+                    "shouldEndSession":False
+
+                }
+
+            })
+
 
         # IntentRequest
         if req_type=="IntentRequest":
@@ -176,59 +155,94 @@ def tinaco():
 
             if last_data is None:
 
-                return jsonify(
-
-                    alexa_response(
-                        "Aun no recibo datos del tinaco"
-                    )
-
-                )
-
-            level=last_data.get("level",0)
-
-            pump=last_data.get("pump","OFF")
-
-            level_text=interpret_level(level)
-
-            speech=f"El nivel del tinaco es {level} por ciento."
-
-            speech+=f" Estado {level_text}."
-
-            if pump=="ON":
-
-                speech+=" La bomba esta encendida."
+                speech="Aun no recibo datos del tinaco"
 
             else:
 
-                speech+=" La bomba esta apagada."
+                level=last_data.get("level",0)
 
-            return jsonify(
+                pump=last_data.get("pump","OFF")
 
-                alexa_response(
-                    speech
-                )
+                level_text=interpret_level(level)
 
-            )
+                speech=f"El nivel del tinaco es {level} por ciento."
 
-        return jsonify(
+                speech+=f" Estado {level_text}."
 
-            alexa_response(
-                "Solicitud no reconocida"
-            )
+                if pump=="ON":
 
-        )
+                    speech+=" La bomba esta encendida."
+
+                else:
+
+                    speech+=" La bomba esta apagada."
+
+            return jsonify({
+
+                "version":"1.0",
+
+                "response":{
+
+                    "outputSpeech":{
+
+                        "type":"PlainText",
+
+                        "text":speech
+
+                    },
+
+                    "shouldEndSession":True
+
+                }
+
+            })
+
+
+        # fallback
+        return jsonify({
+
+            "version":"1.0",
+
+            "response":{
+
+                "outputSpeech":{
+
+                    "type":"PlainText",
+
+                    "text":"No entendi la solicitud"
+
+                },
+
+                "shouldEndSession":True
+
+            }
+
+        })
+
 
     except Exception as e:
 
-        print("Alexa error:",e)
+        print("Error:",e)
 
-        return jsonify(
+        return jsonify({
 
-            alexa_response(
-                "Error interno"
-            )
+            "version":"1.0",
 
-        )
+            "response":{
+
+                "outputSpeech":{
+
+                    "type":"PlainText",
+
+                    "text":"Error interno"
+
+                },
+
+                "shouldEndSession":True
+
+            }
+
+        })
 
 
 if __name__=="__main__":
