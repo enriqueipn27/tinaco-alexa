@@ -10,6 +10,8 @@ import os
 MQTT_BROKER="broker.hivemq.com"
 MQTT_TOPIC="tinaco/enrique/status"
 
+DATA_FILE="last.json"
+
 last_data=None
 last_update=0
 
@@ -47,6 +49,32 @@ def interpret_wifi(w):
     return "señal wifi débil"
 
 
+def save_data(data):
+
+    try:
+
+        with open(DATA_FILE,"w") as f:
+
+            json.dump(data,f)
+
+    except Exception as e:
+
+        print("Save error:",e)
+
+
+def load_data():
+
+    try:
+
+        with open(DATA_FILE) as f:
+
+            return json.load(f)
+
+    except:
+
+        return None
+
+
 def on_message(client,userdata,msg):
 
     global last_data
@@ -61,6 +89,8 @@ def on_message(client,userdata,msg):
 
         last_data=data
         last_update=time.time()
+
+        save_data(data)
 
         print("MQTT:",data)
 
@@ -134,9 +164,15 @@ def home():
 @app.route("/debug")
 def debug():
 
+    data=last_data
+
+    if data is None:
+
+        data=load_data()
+
     return jsonify({
 
-        "last_data":last_data,
+        "last_data":data,
         "last_update":last_update
 
     })
@@ -145,11 +181,14 @@ def debug():
 def build_speech():
 
     global last_data
-    global last_update
 
     if last_data is None:
 
-        return "Aun no recibo datos del tinaco"
+        last_data=load_data()
+
+        if last_data is None:
+
+            return "Aun no recibo datos del tinaco"
 
     level=last_data.get("level",0)
     pump=last_data.get("pump","OFF")
@@ -158,7 +197,15 @@ def build_speech():
     level_text=interpret_level(level)
     wifi_text=interpret_wifi(wifi)
 
-    elapsed=int(time.time()-last_update)
+    device_time=last_data.get("t",0)
+
+    if device_time>0:
+
+        elapsed=int(time.time()-device_time)
+
+    else:
+
+        elapsed=0
 
     speech=f"Nivel {level} por ciento."
     speech+=f" Estado {level_text}."
