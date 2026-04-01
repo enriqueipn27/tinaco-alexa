@@ -152,7 +152,7 @@ def tinaco():
 
     try:
 
-        # GET debug
+        # GET debug manual
         if request.method=="GET":
 
             return jsonify({
@@ -165,8 +165,11 @@ def tinaco():
 
             })
 
-        # POST Alexa
-        req=request.get_json(force=True)
+        # POST Alexa (seguro)
+        req=request.get_json(silent=True)
+
+        if req is None:
+            req={}
 
         print("Alexa request:",req)
 
@@ -178,13 +181,24 @@ def tinaco():
             ""
         )
 
+        # Launch skill
         if req_type=="LaunchRequest":
 
             speech="Puedes preguntarme el nivel del tinaco"
 
+        # Intent
         elif req_type=="IntentRequest":
 
-            intent=req["request"]["intent"]["name"]
+            intent=req.get(
+                "request",
+                {}
+            ).get(
+                "intent",
+                {}
+            ).get(
+                "name",
+                ""
+            )
 
             print("Intent:",intent)
 
@@ -214,7 +228,7 @@ def tinaco():
 
         else:
 
-            speech="Solicitud no reconocida"
+            speech="Sistema listo"
 
         return jsonify({
 
@@ -250,7 +264,7 @@ def tinaco():
 
                     "type":"PlainText",
 
-                    "text":"Error interno del sistema"
+                    "text":"Error interno"
 
                 },
 
