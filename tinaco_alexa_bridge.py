@@ -14,6 +14,8 @@ DATA_FILE="last.json"
 
 last_data=None
 last_update=0
+prev_update=0
+period=35
 
 app=Flask(__name__)
 
@@ -49,6 +51,22 @@ def interpret_wifi(w):
     return "señal wifi débil"
 
 
+def interpret_system(elapsed):
+
+    global period
+
+    if period<=0:
+        return "estado normal"
+
+    if elapsed < period*1.5:
+        return "sistema normal"
+
+    if elapsed < period*3:
+        return "datos atrasados"
+
+    return "no recibo datos recientes"
+
+
 def save_data(data):
 
     try:
@@ -81,6 +99,8 @@ def on_message(client,userdata,msg):
 
     global last_data
     global last_update
+    global prev_update
+    global period
 
     try:
 
@@ -89,9 +109,15 @@ def on_message(client,userdata,msg):
         if "level" not in data:
             return
 
-        last_data=data
+        prev_update=last_update
 
         last_update=time.time()
+
+        if prev_update>0:
+
+            period=last_update-prev_update
+
+        last_data=data
 
         save_data(data)
 
@@ -176,7 +202,8 @@ def debug():
     return jsonify({
 
         "last_data":data,
-        "last_update":last_update
+        "last_update":last_update,
+        "period":period
 
     })
 
@@ -184,6 +211,8 @@ def debug():
 def build_speech():
 
     global last_data
+    global last_update
+    global period
 
     if last_data is None:
 
@@ -203,8 +232,6 @@ def build_speech():
 
     wifi_text=interpret_wifi(wifi)
 
-    # TIEMPO REAL DESDE ÚLTIMO MQTT
-
     server_time=last_data.get("server_time",0)
 
     if server_time>0:
@@ -215,21 +242,22 @@ def build_speech():
 
         elapsed=0
 
-    # TEXTO NATURAL
+
+    # TEXTO TIEMPO
 
     if elapsed<60:
 
         time_text=f"Última lectura hace {elapsed} segundos."
 
-    elif elapsed<300:
+    else:
 
         mins=int(elapsed/60)
 
         time_text=f"Última lectura hace {mins} minutos."
 
-    else:
 
-        time_text="Advertencia. No recibo datos recientes."
+    system_text=interpret_system(elapsed)
+
 
     speech=f"Nivel {level} por ciento."
 
@@ -238,6 +266,8 @@ def build_speech():
     speech+=f" {time_text}"
 
     speech+=f" {wifi_text}."
+
+    speech+=f" {system_text}."
 
     if pump=="ON":
 
