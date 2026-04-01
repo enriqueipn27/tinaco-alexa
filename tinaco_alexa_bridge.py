@@ -83,11 +83,6 @@ def mqtt_loop():
             client.on_connect=on_connect
             client.on_message=on_message
 
-            client.reconnect_delay_set(
-                min_delay=1,
-                max_delay=30
-            )
-
             client.connect(
                 MQTT_BROKER,
                 1883,
@@ -105,13 +100,6 @@ def mqtt_loop():
 
 def start_mqtt():
 
-    global mqtt_started
-
-    if mqtt_started:
-        return
-
-    mqtt_started=True
-
     thread=threading.Thread(
         target=mqtt_loop
     )
@@ -123,10 +111,12 @@ def start_mqtt():
     print("MQTT thread iniciado")
 
 
-@app.before_first_request
-def init_mqtt():
+# INICIO MQTT AL ARRANCAR WORKER
+if not mqtt_started:
 
     start_mqtt()
+
+    mqtt_started=True
 
 
 @app.route("/")
@@ -171,7 +161,7 @@ def tinaco():
 
         if not req:
 
-            speech="Sistema funcionando correctamente"
+            speech="Sistema funcionando"
 
         else:
 
@@ -191,17 +181,13 @@ def tinaco():
 
                 if last_data is None:
 
-                    speech="Aun no recibo datos del tinaco"
+                    speech="Aun no recibo datos"
 
                 else:
 
                     level=last_data.get("level",0)
 
                     pump=last_data.get("pump","OFF")
-
-                    age=int(
-                        time.time()-last_update
-                    )
 
                     level_text=interpret_level(level)
 
@@ -217,15 +203,11 @@ def tinaco():
 
                         speech+=" La bomba esta apagada."
 
-                    if age>90:
-
-                        speech+=f" Ultima actualizacion hace {age} segundos."
-
             else:
 
-                speech="No entendi la solicitud"
+                speech="No entendi"
 
-        response={
+        return jsonify({
 
             "version":"1.0",
 
@@ -243,9 +225,7 @@ def tinaco():
 
             }
 
-        }
-
-        return jsonify(response)
+        })
 
     except Exception as e:
 
@@ -261,7 +241,7 @@ def tinaco():
 
                     "type":"PlainText",
 
-                    "text":"Error leyendo datos del tinaco"
+                    "text":"Error leyendo datos"
 
                 },
 
@@ -273,8 +253,6 @@ def tinaco():
 
 
 if __name__=="__main__":
-
-    start_mqtt()
 
     app.run(
 
