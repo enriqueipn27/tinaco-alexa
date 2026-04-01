@@ -201,9 +201,9 @@ def build_speech():
     wifi_text=interpret_wifi(wifi)
 
     # TIEMPO REAL CORRECTO
-    server_time=last_data.get("server_time",time.time())
-
-    elapsed=int(time.time()-server_time)
+    
+    sensor_time=last_data.get("t",time.time())
+    elapsed=int(time.time()-sensor_time)
 
     speech=f"Nivel {level} por ciento."
     speech+=f" Estado {level_text}."
