@@ -32,7 +32,7 @@ def interpret_level(level):
     if level>=20:
         return "nivel bajo"
 
-    return "nivel critico"
+    return "nivel crítico"
 
 
 def interpret_wifi(w):
@@ -52,6 +52,8 @@ def interpret_wifi(w):
 def save_data(data):
 
     try:
+
+        data["server_time"]=time.time()
 
         with open(DATA_FILE,"w") as f:
 
@@ -199,13 +201,9 @@ def build_speech():
     wifi_text=interpret_wifi(wifi)
 
     # TIEMPO REAL CORRECTO
-    if last_update>0:
+    server_time=last_data.get("server_time",time.time())
 
-        elapsed=int(time.time()-last_update)
-
-    else:
-
-        elapsed=0
+    elapsed=int(time.time()-server_time)
 
     speech=f"Nivel {level} por ciento."
     speech+=f" Estado {level_text}."
