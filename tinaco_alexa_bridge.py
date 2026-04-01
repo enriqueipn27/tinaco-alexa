@@ -87,38 +87,33 @@ def on_disconnect(client,userdata,rc):
     print("MQTT desconectado")
 
 
-def mqtt_loop():
-
-    client=mqtt.Client()
-
-    client.on_connect=on_connect
-    client.on_message=on_message
-    client.on_disconnect=on_disconnect
-
-    while True:
-
-        try:
-
-            print("MQTT connecting")
-
-            client.connect(MQTT_BROKER,1883,60)
-
-            while True:
-
-                client.loop(timeout=1.0)
-
-                time.sleep(0.5)
-
-        except Exception as e:
-
-            print("MQTT reconnect:",e)
-
-            time.sleep(5)
-
-
 def start_mqtt():
 
-    thread=threading.Thread(target=mqtt_loop)
+    def run():
+
+        while True:
+
+            try:
+
+                print("MQTT connecting")
+
+                client=mqtt.Client()
+
+                client.on_connect=on_connect
+                client.on_message=on_message
+                client.on_disconnect=on_disconnect
+
+                client.connect(MQTT_BROKER,1883,60)
+
+                client.loop_forever()
+
+            except Exception as e:
+
+                print("MQTT reconnect",e)
+
+                time.sleep(5)
+
+    thread=threading.Thread(target=run)
 
     thread.daemon=True
 
