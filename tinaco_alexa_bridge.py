@@ -48,7 +48,7 @@ def on_message(client,userdata,msg):
 
         last_update=time.time()
 
-        print("MQTT:",data)
+        print("MQTT recibido:",data)
 
     except Exception as e:
 
@@ -59,9 +59,15 @@ def on_connect(client,userdata,flags,rc):
 
     print("MQTT conectado codigo:",rc)
 
-    client.subscribe(MQTT_TOPIC)
+    if rc==0:
 
-    print("Suscrito a:",MQTT_TOPIC)
+        client.subscribe(MQTT_TOPIC)
+
+        print("Suscrito a:",MQTT_TOPIC)
+
+    else:
+
+        print("Error MQTT codigo:",rc)
 
 
 def mqtt_loop():
@@ -70,14 +76,23 @@ def mqtt_loop():
 
         try:
 
-            client=mqtt.Client()
+            print("Intentando conectar MQTT...")
+
+            client=mqtt.Client(protocol=mqtt.MQTTv311)
 
             client.on_connect=on_connect
             client.on_message=on_message
 
-            client.reconnect_delay_set(min_delay=1,max_delay=30)
+            client.reconnect_delay_set(
+                min_delay=1,
+                max_delay=30
+            )
 
-            client.connect(MQTT_BROKER,1883,60)
+            client.connect(
+                MQTT_BROKER,
+                1883,
+                60
+            )
 
             client.loop_forever()
 
@@ -99,6 +114,7 @@ def start_mqtt():
     print("MQTT thread iniciado")
 
 
+# iniciar MQTT
 start_mqtt()
 
 
@@ -108,7 +124,7 @@ def home():
     return "Tinaco Alexa bridge running"
 
 
-# Endpoint debug (MUY útil)
+# Endpoint debug
 @app.route("/debug")
 def debug():
 
@@ -129,7 +145,7 @@ def tinaco():
 
     try:
 
-        # Permitir prueba navegador
+        # Permitir ver datos en navegador
         if request.method=="GET":
 
             return jsonify({
@@ -150,9 +166,15 @@ def tinaco():
 
         else:
 
-            req_type=req.get("request",{}).get("type","")
+            req_type=req.get(
+                "request",
+                {}
+            ).get(
+                "type",
+                ""
+            )
 
-            # LaunchRequest (MUY IMPORTANTE)
+            # LaunchRequest
             if req_type=="LaunchRequest":
 
                 speech="Puedes preguntarme el nivel del tinaco"
@@ -170,7 +192,9 @@ def tinaco():
 
                     pump=last_data.get("pump","OFF")
 
-                    age=int(time.time()-last_update)
+                    age=int(
+                        time.time()-last_update
+                    )
 
                     level_text=interpret_level(level)
 
@@ -247,6 +271,11 @@ if __name__=="__main__":
 
         host="0.0.0.0",
 
-        port=int(os.environ.get("PORT",5000))
+        port=int(
+            os.environ.get(
+                "PORT",
+                5000
+            )
+        )
 
     )
