@@ -13,7 +13,6 @@ MQTT_TOPIC="tinaco/enrique/status"
 DATA_FILE="last.json"
 
 last_data=None
-last_update=0
 
 app=Flask(__name__)
 
@@ -53,9 +52,14 @@ def save_data(data):
 
     try:
 
+        data_copy=data.copy()
+
+        # tiempo del servidor (clave del sistema)
+        data_copy["server_time"]=time.time()
+
         with open(DATA_FILE,"w") as f:
 
-            json.dump(data,f)
+            json.dump(data_copy,f)
 
     except Exception as e:
 
@@ -78,7 +82,6 @@ def load_data():
 def on_message(client,userdata,msg):
 
     global last_data
-    global last_update
 
     try:
 
@@ -88,7 +91,6 @@ def on_message(client,userdata,msg):
             return
 
         last_data=data
-        last_update=time.time()
 
         save_data(data)
 
@@ -162,8 +164,7 @@ def debug():
 
     return jsonify({
 
-        "last_data":data,
-        "last_update":last_update
+        "last_data":data
 
     })
 
@@ -171,41 +172,62 @@ def debug():
 def build_speech():
 
     global last_data
-    global last_update
 
-    if last_data is None:
+    saved=last_data
 
-        last_data=load_data()
+    if saved is None:
 
-        if last_data is None:
+        saved=load_data()
+
+        if saved is None:
 
             return "Aún no recibo datos del tinaco"
 
-    level=last_data.get("level",0)
-    pump=last_data.get("pump","OFF")
-    wifi=last_data.get("w",-100)
+    level=saved.get("level",0)
+
+    pump=saved.get("pump","OFF")
+
+    wifi=saved.get("w",-100)
+
+    server_time=saved.get("server_time",0)
 
     level_text=interpret_level(level)
+
     wifi_text=interpret_wifi(wifi)
 
-    # TIEMPO REAL CORRECTO
-    elapsed=int(time.time()-last_update)
 
-    if elapsed<90:
+    # tiempo real correcto
+    if server_time>0:
 
-        time_text=f"Última lectura hace {elapsed} segundos."
+        elapsed=int(time.time()-server_time)
 
     else:
 
-        mins=int(elapsed/60)
+        elapsed=0
 
-        time_text=f"Última lectura hace {mins} minutos."
+
+    # interpretación inteligente
+    if elapsed<70:
+
+        time_text=f"Última lectura hace {elapsed} segundos."
+
+    elif elapsed<300:
+
+        time_text="Datos con retraso."
+
+    else:
+
+        time_text="No recibo datos recientes del sensor."
 
 
     speech=f"Nivel {level} por ciento."
+
     speech+=f" Estado {level_text}."
+
     speech+=f" {time_text}"
+
     speech+=f" {wifi_text}."
+
 
     if pump=="ON":
 
@@ -214,6 +236,7 @@ def build_speech():
     else:
 
         speech+=" Bomba apagada."
+
 
     return speech
 
