@@ -54,7 +54,6 @@ def save_data(data):
 
         data_copy=data.copy()
 
-        # tiempo del servidor (clave del sistema)
         data_copy["server_time"]=time.time()
 
         with open(DATA_FILE,"w") as f:
@@ -109,6 +108,25 @@ def on_connect(client,userdata,flags,rc):
 
         client.subscribe(MQTT_TOPIC)
 
+    else:
+
+        print("MQTT error",rc)
+
+
+def on_disconnect(client,userdata,rc):
+
+    print("MQTT desconectado")
+
+    time.sleep(3)
+
+    try:
+
+        client.reconnect()
+
+    except:
+
+        pass
+
 
 def start_mqtt():
 
@@ -124,10 +142,17 @@ def start_mqtt():
 
                 client.on_connect=on_connect
                 client.on_message=on_message
+                client.on_disconnect=on_disconnect
 
                 client.connect(MQTT_BROKER,1883,60)
 
-                client.loop_forever()
+                client.loop_start()
+
+                print("MQTT running")
+
+                while True:
+
+                    time.sleep(60)
 
             except Exception as e:
 
@@ -196,7 +221,6 @@ def build_speech():
     wifi_text=interpret_wifi(wifi)
 
 
-    # tiempo real correcto
     if server_time>0:
 
         elapsed=int(time.time()-server_time)
@@ -206,7 +230,6 @@ def build_speech():
         elapsed=0
 
 
-    # interpretación inteligente
     if elapsed<70:
 
         time_text=f"Última lectura hace {elapsed} segundos."
@@ -302,6 +325,7 @@ if __name__=="__main__":
     app.run(
 
         host="0.0.0.0",
+
         port=int(os.environ.get("PORT",5000))
 
     )
