@@ -6,6 +6,7 @@ import json
 import time
 import threading
 import os
+import uuid
 
 MQTT_BROKER="broker.hivemq.com"
 MQTT_TOPIC="tinaco/enrique/status"
@@ -13,8 +14,12 @@ MQTT_TOPIC="tinaco/enrique/status"
 DATA_FILE="last.json"
 
 last_data=None
+last_pump=None
 
 app=Flask(__name__)
+
+
+DEVICE_ID="sistema_tinaco_001"
 
 
 def interpret_level(level):
@@ -37,15 +42,15 @@ def interpret_level(level):
 def interpret_wifi(w):
 
     if w>=-60:
-        return "señal wifi excelente"
+        return "excelente"
 
     if w>=-70:
-        return "señal wifi buena"
+        return "buena"
 
     if w>=-80:
-        return "señal wifi regular"
+        return "regular"
 
-    return "señal wifi débil"
+    return "débil"
 
 
 def save_data(data):
@@ -78,9 +83,17 @@ def load_data():
         return None
 
 
+def pump_event(state):
+
+    print("Pump change:",state)
+
+    # aqui luego puedes agregar reportState
+
+
 def on_message(client,userdata,msg):
 
     global last_data
+    global last_pump
 
     try:
 
@@ -92,6 +105,18 @@ def on_message(client,userdata,msg):
         last_data=data
 
         save_data(data)
+
+        pump=data.get("pump","OFF")
+
+        if last_pump is None:
+
+            last_pump=pump
+
+        elif pump!=last_pump:
+
+            pump_event(pump)
+
+            last_pump=pump
 
         print("MQTT:",data)
 
@@ -194,19 +219,30 @@ def debug():
     })
 
 
-def build_speech():
+def get_current_state():
 
     global last_data
 
-    saved=last_data
+    data=last_data
+
+    if data is None:
+
+        data=load_data()
+
+        if data is None:
+
+            return None
+
+    return data
+
+
+def build_speech():
+
+    saved=get_current_state()
 
     if saved is None:
 
-        saved=load_data()
-
-        if saved is None:
-
-            return "Aún no recibo datos del tinaco"
+        return "Aún no recibo datos del tinaco"
 
     level=saved.get("level",0)
 
@@ -219,7 +255,6 @@ def build_speech():
     level_text=interpret_level(level)
 
     wifi_text=interpret_wifi(wifi)
-
 
     if server_time>0:
 
@@ -240,25 +275,27 @@ def build_speech():
 
     else:
 
-        time_text="No recibo datos recientes del sensor."
+        time_text="No recibo datos recientes."
 
 
-    speech=f"Nivel {level} por ciento."
-
-    speech+=f" Estado {level_text}."
-
-    speech+=f" {time_text}"
-
-    speech+=f" {wifi_text}."
-
+    speech=f"La bomba está "
 
     if pump=="ON":
 
-        speech+=" Bomba encendida."
+        speech+="encendida."
 
     else:
 
-        speech+=" Bomba apagada."
+        speech+="apagada."
+
+
+    speech+=f" Nivel {level} por ciento."
+
+    speech+=f" Estado {level_text}."
+
+    speech+=f" Señal wifi {wifi_text}."
+
+    speech+=f" {time_text}"
 
 
     return speech
@@ -271,7 +308,7 @@ def tinaco():
 
         req=request.get_json(force=True)
 
-        print("Alexa:",req)
+        print("Alexa Custom:",req)
 
         speech=build_speech()
 
@@ -318,6 +355,185 @@ def tinaco():
             }
 
         })
+
+
+# =========================
+# SMART HOME SKILL
+# =========================
+
+@app.route("/smarthome",methods=["POST"])
+def smarthome():
+
+    req=request.get_json()
+
+    print("SmartHome:",json.dumps(req))
+
+    directive=req["directive"]
+
+    name=directive["header"]["name"]
+
+    if name=="Discover":
+
+        return discovery_response(directive)
+
+    if name=="ReportState":
+
+        return report_state(directive)
+
+    return {}
+
+
+def discovery_response(directive):
+
+    return {
+
+        "event":{
+
+            "header":{
+
+                "namespace":"Alexa.Discovery",
+
+                "name":"Discover.Response",
+
+                "payloadVersion":"3",
+
+                "messageId":str(uuid.uuid4())
+
+            },
+
+            "payload":{
+
+                "endpoints":[
+
+                    {
+
+                        "endpointId":DEVICE_ID,
+
+                        "manufacturerName":"Enrique IoT",
+
+                        "friendlyName":"Sistema tinaco",
+
+                        "description":"Sistema tinaco IoT",
+
+                        "displayCategories":[
+
+                            "SWITCH"
+
+                        ],
+
+                        "capabilities":[
+
+                            {
+
+                                "type":"AlexaInterface",
+
+                                "interface":"Alexa",
+
+                                "version":"3"
+
+                            },
+
+                            {
+
+                                "type":"AlexaInterface",
+
+                                "interface":"Alexa.PowerController",
+
+                                "version":"3",
+
+                                "properties":{
+
+                                    "supported":[
+
+                                        {
+
+                                            "name":"powerState"
+
+                                        }
+
+                                    ],
+
+                                    "retrievable":True
+
+                                }
+
+                            }
+
+                        ]
+
+                    }
+
+                ]
+
+            }
+
+        }
+
+    }
+
+
+def report_state(directive):
+
+    data=get_current_state()
+
+    if data is None:
+
+        power="OFF"
+
+    else:
+
+        power=data.get("pump","OFF")
+
+
+    return {
+
+        "context":{
+
+            "properties":[
+
+                {
+
+                    "namespace":"Alexa.PowerController",
+
+                    "name":"powerState",
+
+                    "value":power,
+
+                    "timeOfSample":time.strftime("%Y-%m-%dT%H:%M:%SZ",time.gmtime()),
+
+                    "uncertaintyInMilliseconds":500
+
+                }
+
+            ]
+
+        },
+
+        "event":{
+
+            "header":{
+
+                "namespace":"Alexa",
+
+                "name":"StateReport",
+
+                "payloadVersion":"3",
+
+                "messageId":str(uuid.uuid4())
+
+            },
+
+            "endpoint":{
+
+                "endpointId":DEVICE_ID
+
+            },
+
+            "payload":{}
+
+        }
+
+    }
 
 
 if __name__=="__main__":
