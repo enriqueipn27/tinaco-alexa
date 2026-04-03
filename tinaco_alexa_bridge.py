@@ -244,12 +244,17 @@ def build_speech():
 
         return "Aún no recibo datos del tinaco"
 
-    level=saved.get("level",0)
+    level=int(saved.get("lvl",0))
+    pump=saved.get("p",0)
+    wifi=int(saved.get("w",-100))
+    height=float(saved.get("h",0))
+    liters=int(saved.get("l",0))
 
-    pump=saved.get("pump","OFF")
-
-    wifi=saved.get("w",-100)
-
+    if pump==1:
+        pump="ON"
+    else:
+        pump="OFF"
+   
     server_time=saved.get("server_time",0)
 
     level_text=interpret_level(level)
@@ -288,9 +293,10 @@ def build_speech():
 
         speech+="apagada."
 
-
     speech+=f" Nivel {level} por ciento."
-
+    speech+=f" Altura {height} centímetros."
+    speech+=f" Volumen {liters} litros."
+    
     speech+=f" Estado {level_text}."
 
     speech+=f" Señal wifi {wifi_text}."
