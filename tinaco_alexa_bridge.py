@@ -18,9 +18,7 @@ last_pump=None
 
 app=Flask(__name__)
 
-
 DEVICE_ID="sistema_tinaco_001"
-
 
 def interpret_level(level):
 
@@ -38,7 +36,6 @@ def interpret_level(level):
 
     return "nivel crítico"
 
-
 def interpret_wifi(w):
 
     if w>=-60:
@@ -51,7 +48,6 @@ def interpret_wifi(w):
         return "regular"
 
     return "débil"
-
 
 def save_data(data):
 
@@ -69,7 +65,6 @@ def save_data(data):
 
         print("Save error:",e)
 
-
 def load_data():
 
     try:
@@ -82,13 +77,9 @@ def load_data():
 
         return None
 
-
 def pump_event(state):
 
     print("Pump change:",state)
-
-    # aqui luego puedes agregar reportState
-
 
 def on_message(client,userdata,msg):
 
@@ -99,14 +90,21 @@ def on_message(client,userdata,msg):
 
         data=json.loads(msg.payload.decode())
 
-        if "level" not in data:
+        # aceptar nuevo formato
+        if "lvl" not in data:
             return
+
+        # normalizar datos
+        data["level"]=int(data.get("lvl",0))
+        data["pump"]="ON" if data.get("p",0)==1 else "OFF"
+        data["liters"]=int(data.get("l",0))
+        data["height"]=float(data.get("h",0))
 
         last_data=data
 
         save_data(data)
 
-        pump=data.get("pump","OFF")
+        pump=data["pump"]
 
         if last_pump is None:
 
@@ -124,7 +122,6 @@ def on_message(client,userdata,msg):
 
         print("JSON error:",e)
 
-
 def on_connect(client,userdata,flags,rc):
 
     if rc==0:
@@ -136,7 +133,6 @@ def on_connect(client,userdata,flags,rc):
     else:
 
         print("MQTT error",rc)
-
 
 def on_disconnect(client,userdata,rc):
 
@@ -151,7 +147,6 @@ def on_disconnect(client,userdata,rc):
     except:
 
         pass
-
 
 def start_mqtt():
 
@@ -193,15 +188,12 @@ def start_mqtt():
 
     print("MQTT iniciado")
 
-
 start_mqtt()
-
 
 @app.route("/")
 def home():
 
     return "Tinaco Alexa bridge running"
-
 
 @app.route("/debug")
 def debug():
@@ -217,7 +209,6 @@ def debug():
         "last_data":data
 
     })
-
 
 def get_current_state():
 
@@ -235,7 +226,6 @@ def get_current_state():
 
     return data
 
-
 def build_speech():
 
     saved=get_current_state()
@@ -244,17 +234,12 @@ def build_speech():
 
         return "Aún no recibo datos del tinaco"
 
-    level=int(saved.get("lvl",0))
-    pump=saved.get("p",0)
+    level=saved.get("level",0)
+    pump=saved.get("pump","OFF")
     wifi=int(saved.get("w",-100))
-    height=float(saved.get("h",0))
-    liters=int(saved.get("l",0))
+    height=saved.get("height",0)
+    liters=saved.get("liters",0)
 
-    if pump==1:
-        pump="ON"
-    else:
-        pump="OFF"
-   
     server_time=saved.get("server_time",0)
 
     level_text=interpret_level(level)
@@ -269,7 +254,6 @@ def build_speech():
 
         elapsed=0
 
-
     if elapsed<70:
 
         time_text=f"Última lectura hace {elapsed} segundos."
@@ -281,7 +265,6 @@ def build_speech():
     else:
 
         time_text="No recibo datos recientes."
-
 
     speech=f"La bomba está "
 
@@ -296,25 +279,21 @@ def build_speech():
     speech+=f" Nivel {level} por ciento."
     speech+=f" Altura {height} centímetros."
     speech+=f" Volumen {liters} litros."
-    
     speech+=f" Estado {level_text}."
-
     speech+=f" Señal wifi {wifi_text}."
-
     speech+=f" {time_text}"
 
-
     return speech
-
 
 @app.route("/tinaco",methods=["POST","GET"])
 def tinaco():
 
     try:
 
-        req=request.get_json(force=True)
+        req=request.get_json(silent=True)
 
-        print("Alexa Custom:",req)
+        if req:
+            print("Alexa:",req)
 
         speech=build_speech()
 
@@ -362,10 +341,7 @@ def tinaco():
 
         })
 
-
-# =========================
-# SMART HOME SKILL
-# =========================
+# SMART HOME
 
 @app.route("/smarthome",methods=["POST"])
 def smarthome():
@@ -380,16 +356,15 @@ def smarthome():
 
     if name=="Discover":
 
-        return discovery_response(directive)
+        return discovery_response()
 
     if name=="ReportState":
 
-        return report_state(directive)
+        return report_state()
 
     return {}
 
-
-def discovery_response(directive):
+def discovery_response():
 
     return {
 
@@ -418,8 +393,6 @@ def discovery_response(directive):
                         "manufacturerName":"Enrique IoT",
 
                         "friendlyName":"Sistema tinaco",
-
-                        "description":"Sistema tinaco IoT",
 
                         "displayCategories":[
 
@@ -477,8 +450,7 @@ def discovery_response(directive):
 
     }
 
-
-def report_state(directive):
+def report_state():
 
     data=get_current_state()
 
@@ -489,7 +461,6 @@ def report_state(directive):
     else:
 
         power=data.get("pump","OFF")
-
 
     return {
 
@@ -540,7 +511,6 @@ def report_state(directive):
         }
 
     }
-
 
 if __name__=="__main__":
 
