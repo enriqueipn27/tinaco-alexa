@@ -6,7 +6,6 @@ import json
 import time
 import threading
 import os
-import uuid
 import requests
 
 ####################################
@@ -18,9 +17,6 @@ MQTT_TOPIC="tinaco/enrique/status"
 
 DATA_FILE="last.json"
 
-DEVICE_ID="sistema_tinaco_001"
-
-# TELEGRAM (activar cuando quieras)
 TELEGRAM_ENABLED=False
 
 TELEGRAM_TOKEN="PUT_TOKEN"
@@ -54,12 +50,19 @@ def send_telegram(msg):
         url=f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
         requests.get(
+
             url,
+
             params={
+
                 "chat_id":TELEGRAM_CHAT,
+
                 "text":msg
+
             },
+
             timeout=3
+
         )
 
     except Exception as e:
@@ -133,23 +136,23 @@ def load_data():
 
 def normalize(data):
 
-    norm={}
+    return {
 
-    norm["level"]=int(data.get("lvl",0))
+        "level":int(data.get("lvl",0)),
 
-    norm["pump"]="ON" if data.get("p",0)==1 else "OFF"
+        "pump":"ON" if data.get("p",0)==1 else "OFF",
 
-    norm["liters"]=int(data.get("l",0))
+        "liters":int(data.get("l",0)),
 
-    norm["height"]=float(data.get("h",0))
+        "height":float(data.get("h",0)),
 
-    norm["wifi"]=int(data.get("w",-100))
+        "wifi":int(data.get("w",-100)),
 
-    norm["mcu_time"]=data.get("t",0)
+        "mcu_time":data.get("t",0),
 
-    norm["server_time"]=time.time()
+        "server_time":time.time()
 
-    return norm
+    }
 
 ####################################
 # MQTT
@@ -170,11 +173,10 @@ def on_message(client,userdata,msg):
 
         with data_lock:
 
-            last_data=norm
+            last_data=dict(norm)
 
             save_data(norm)
 
-        # detectar cambio bomba
         pump=norm["pump"]
 
         if last_pump_state is None:
@@ -201,7 +203,7 @@ def on_message(client,userdata,msg):
 
     except Exception as e:
 
-        print("JSON error:",e)
+        print("MQTT error:",e)
 
 def on_connect(client,userdata,flags,rc):
 
@@ -211,14 +213,6 @@ def on_connect(client,userdata,flags,rc):
 
         client.subscribe(MQTT_TOPIC)
 
-    else:
-
-        print("MQTT error",rc)
-
-def on_disconnect(client,userdata,rc):
-
-    print("MQTT desconectado")
-
 def mqtt_loop():
 
     while True:
@@ -227,13 +221,13 @@ def mqtt_loop():
 
             print("MQTT connecting")
 
-            client=mqtt.Client()
+            client=mqtt.Client(
+                mqtt.CallbackAPIVersion.VERSION1
+            )
 
             client.on_connect=on_connect
 
             client.on_message=on_message
-
-            client.on_disconnect=on_disconnect
 
             client.connect(MQTT_BROKER,1883,60)
 
@@ -255,8 +249,11 @@ def start_mqtt():
     mqtt_started=True
 
     thread=threading.Thread(
+
         target=mqtt_loop,
+
         daemon=True
+
     )
 
     thread.start()
@@ -274,7 +271,8 @@ def get_state():
     with data_lock:
 
         if last_data:
-            return last_data
+
+            return dict(last_data)
 
     data=load_data()
 
@@ -282,7 +280,9 @@ def get_state():
 
         last_data=data
 
-    return data
+        return dict(data)
+
+    return None
 
 ####################################
 # SPEECH
@@ -294,7 +294,7 @@ def build_speech():
 
     if data is None:
 
-        return "Sistema tinaco activo pero aún sin datos."
+        return "Sistema activo pero aún sin datos."
 
     level=data["level"]
 
@@ -312,29 +312,21 @@ def build_speech():
 
     wifi_text=interpret_wifi(wifi)
 
-    if elapsed<90:
+    if elapsed<120:
 
-        time_text=f"Última lectura hace {elapsed} segundos."
+        time_text="Datos recientes."
 
     elif elapsed<600:
 
-        mins=int(elapsed/60)
-
-        time_text=f"Último dato hace {mins} minutos."
+        time_text="Datos válidos."
 
     else:
 
-        time_text="Datos no recientes."
+        time_text="Datos antiguos."
 
     speech="Estado del tinaco."
 
-    if pump=="ON":
-
-        speech+=" Bomba encendida."
-
-    else:
-
-        speech+=" Bomba apagada."
+    speech+= " Bomba encendida." if pump=="ON" else " Bomba apagada."
 
     speech+=f" Nivel {level} por ciento."
 
@@ -395,18 +387,12 @@ def health():
 
     data=get_state()
 
-    if data:
-
-        return {"status":"ok"}
-
-    return {"status":"waiting_data"}
+    return {"status":"ok"} if data else {"status":"waiting"}
 
 @app.route("/tinaco",methods=["POST"])
 def tinaco():
 
-    speech=build_speech()
-
-    return alexa_response(speech)
+    return alexa_response(build_speech())
 
 ####################################
 # MAIN
