@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from flask import Flask,jsonify,request
+from flask import Flask,request,jsonify
 import paho.mqtt.client as mqtt
 import json
 import time
@@ -14,11 +14,15 @@ MQTT_TOPIC="tinaco/enrique/status"
 DATA_FILE="last.json"
 
 last_data=None
-last_pump=None
+data_lock=threading.Lock()
 
 app=Flask(__name__)
 
 DEVICE_ID="sistema_tinaco_001"
+
+####################################
+# INTERPRETACION
+####################################
 
 def interpret_level(level):
 
@@ -49,17 +53,17 @@ def interpret_wifi(w):
 
     return "débil"
 
+####################################
+# STORAGE
+####################################
+
 def save_data(data):
 
     try:
 
-        data_copy=data.copy()
-
-        data_copy["server_time"]=time.time()
-
         with open(DATA_FILE,"w") as f:
 
-            json.dump(data_copy,f)
+            json.dump(data,f)
 
     except Exception as e:
 
@@ -77,46 +81,50 @@ def load_data():
 
         return None
 
-def pump_event(state):
+####################################
+# MQTT
+####################################
 
-    print("Pump change:",state)
+def normalize(data):
+
+    norm={}
+
+    norm["level"]=int(data.get("lvl",0))
+
+    norm["pump"]="ON" if data.get("p",0)==1 else "OFF"
+
+    norm["liters"]=int(data.get("l",0))
+
+    norm["height"]=float(data.get("h",0))
+
+    norm["wifi"]=int(data.get("w",-100))
+
+    norm["mcu_time"]=data.get("t",0)
+
+    norm["server_time"]=time.time()
+
+    return norm
 
 def on_message(client,userdata,msg):
 
     global last_data
-    global last_pump
 
     try:
 
-        data=json.loads(msg.payload.decode())
+        raw=json.loads(msg.payload.decode())
 
-        # aceptar nuevo formato
-        if "lvl" not in data:
+        if "lvl" not in raw:
             return
 
-        # normalizar datos
-        data["level"]=int(data.get("lvl",0))
-        data["pump"]="ON" if data.get("p",0)==1 else "OFF"
-        data["liters"]=int(data.get("l",0))
-        data["height"]=float(data.get("h",0))
+        norm=normalize(raw)
 
-        last_data=data
+        with data_lock:
 
-        save_data(data)
+            last_data=norm
 
-        pump=data["pump"]
+            save_data(norm)
 
-        if last_pump is None:
-
-            last_pump=pump
-
-        elif pump!=last_pump:
-
-            pump_event(pump)
-
-            last_pump=pump
-
-        print("MQTT:",data)
+        print("MQTT:",norm)
 
     except Exception as e:
 
@@ -130,162 +138,160 @@ def on_connect(client,userdata,flags,rc):
 
         client.subscribe(MQTT_TOPIC)
 
-    else:
-
-        print("MQTT error",rc)
-
 def on_disconnect(client,userdata,rc):
 
     print("MQTT desconectado")
 
-    time.sleep(3)
+def mqtt_loop():
 
-    try:
+    while True:
 
-        client.reconnect()
+        try:
 
-    except:
+            print("MQTT connecting")
 
-        pass
+            client=mqtt.Client()
 
-def start_mqtt():
+            client.on_connect=on_connect
 
-    def run():
+            client.on_message=on_message
 
-        while True:
+            client.on_disconnect=on_disconnect
 
-            try:
+            client.connect(MQTT_BROKER,1883,60)
 
-                print("MQTT connecting")
+            client.loop_forever()
 
-                client=mqtt.Client()
+        except Exception as e:
 
-                client.on_connect=on_connect
-                client.on_message=on_message
-                client.on_disconnect=on_disconnect
+            print("MQTT reconnect:",e)
 
-                client.connect(MQTT_BROKER,1883,60)
+            time.sleep(5)
 
-                client.loop_start()
+thread=threading.Thread(target=mqtt_loop)
 
-                print("MQTT running")
+thread.daemon=True
 
-                while True:
+thread.start()
 
-                    time.sleep(60)
+####################################
+# STATE
+####################################
 
-            except Exception as e:
-
-                print("MQTT reconnect",e)
-
-                time.sleep(5)
-
-    thread=threading.Thread(target=run)
-
-    thread.daemon=True
-
-    thread.start()
-
-    print("MQTT iniciado")
-
-start_mqtt()
-
-@app.route("/")
-def home():
-
-    return "Tinaco Alexa bridge running"
-
-@app.route("/debug")
-def debug():
-
-    data=last_data
-
-    if data is None:
-
-        data=load_data()
-
-    return jsonify({
-
-        "last_data":data
-
-    })
-
-def get_current_state():
+def get_state():
 
     global last_data
 
-    data=last_data
+    with data_lock:
 
-    if data is None:
+        if last_data:
+            return last_data
 
-        data=load_data()
-
-        if data is None:
-
-            return None
+    data=load_data()
 
     return data
 
+####################################
+# SPEECH
+####################################
+
 def build_speech():
 
-    saved=get_current_state()
+    data=get_state()
 
-    if saved is None:
+    if data is None:
 
         return "Aún no recibo datos del tinaco"
 
-    level=saved.get("level",0)
-    pump=saved.get("pump","OFF")
-    wifi=int(saved.get("w",-100))
-    height=saved.get("height",0)
-    liters=saved.get("liters",0)
+    level=data["level"]
 
-    server_time=saved.get("server_time",0)
+    pump=data["pump"]
+
+    wifi=data["wifi"]
+
+    height=data["height"]
+
+    liters=data["liters"]
+
+    elapsed=int(time.time()-data["server_time"])
 
     level_text=interpret_level(level)
 
     wifi_text=interpret_wifi(wifi)
 
-    if server_time>0:
+    if elapsed<90:
 
-        elapsed=int(time.time()-server_time)
-
-    else:
-
-        elapsed=0
-
-    if elapsed<70:
-
-        time_text=f"Última lectura hace {elapsed} segundos."
-
-    elif elapsed<300:
-
-        time_text="Datos con retraso."
+        time_text=f"Última lectura hace {elapsed} segundos"
 
     else:
 
-        time_text="No recibo datos recientes."
+        time_text="Datos no recientes"
 
-    speech=f"La bomba está "
+    speech=""
 
     if pump=="ON":
 
-        speech+="encendida."
+        speech+="La bomba está encendida."
 
     else:
 
-        speech+="apagada."
+        speech+="La bomba está apagada."
 
     speech+=f" Nivel {level} por ciento."
-    speech+=f" Altura {height} centímetros."
+
+    speech+=f" Altura {round(height,1)} centímetros."
+
     speech+=f" Volumen {liters} litros."
+
     speech+=f" Estado {level_text}."
+
     speech+=f" Señal wifi {wifi_text}."
-    speech+=f" {time_text}"
+
+    speech+=f" {time_text}."
 
     return speech
 
-@app.route("/tinaco",methods=["POST","GET"])
+####################################
+# ALEXA RESPONSE
+####################################
+
+def alexa_response(text):
+
+    return {
+
+        "version":"1.0",
+
+        "response":{
+
+            "outputSpeech":{
+
+                "type":"PlainText",
+
+                "text":text
+
+            },
+
+            "shouldEndSession":True
+
+        }
+
+    }
+
+####################################
+# ROUTES
+####################################
+
+@app.route("/")
+def home():
+
+    return "Tinaco Alexa bridge OK"
+
+@app.route("/debug")
+def debug():
+
+    return jsonify(get_state())
+
+@app.route("/tinaco",methods=["POST"])
 def tinaco():
 
     try:
@@ -293,66 +299,28 @@ def tinaco():
         req=request.get_json(silent=True)
 
         if req:
-            print("Alexa:",req)
+            print("Alexa request")
 
         speech=build_speech()
 
-        return jsonify({
-
-            "version":"1.0",
-
-            "response":{
-
-                "outputSpeech":{
-
-                    "type":"PlainText",
-
-                    "text":speech
-
-                },
-
-                "shouldEndSession":True
-
-            }
-
-        })
+        return alexa_response(speech)
 
     except Exception as e:
 
-        print("Error:",e)
+        print(e)
 
-        return jsonify({
+        return alexa_response("Error sistema tinaco")
 
-            "version":"1.0",
-
-            "response":{
-
-                "outputSpeech":{
-
-                    "type":"PlainText",
-
-                    "text":"Error interno"
-
-                },
-
-                "shouldEndSession":True
-
-            }
-
-        })
-
+####################################
 # SMART HOME
+####################################
 
 @app.route("/smarthome",methods=["POST"])
 def smarthome():
 
     req=request.get_json()
 
-    print("SmartHome:",json.dumps(req))
-
-    directive=req["directive"]
-
-    name=directive["header"]["name"]
+    name=req["directive"]["header"]["name"]
 
     if name=="Discover":
 
@@ -394,11 +362,7 @@ def discovery_response():
 
                         "friendlyName":"Sistema tinaco",
 
-                        "displayCategories":[
-
-                            "SWITCH"
-
-                        ],
+                        "displayCategories":["SWITCH"],
 
                         "capabilities":[
 
@@ -422,15 +386,7 @@ def discovery_response():
 
                                 "properties":{
 
-                                    "supported":[
-
-                                        {
-
-                                            "name":"powerState"
-
-                                        }
-
-                                    ],
+                                    "supported":[{"name":"powerState"}],
 
                                     "retrievable":True
 
@@ -452,15 +408,15 @@ def discovery_response():
 
 def report_state():
 
-    data=get_current_state()
+    data=get_state()
 
-    if data is None:
+    if data:
 
-        power="OFF"
+        power=data["pump"]
 
     else:
 
-        power=data.get("pump","OFF")
+        power="OFF"
 
     return {
 
@@ -511,6 +467,10 @@ def report_state():
         }
 
     }
+
+####################################
+# MAIN
+####################################
 
 if __name__=="__main__":
 
