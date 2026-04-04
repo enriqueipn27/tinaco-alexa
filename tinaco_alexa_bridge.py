@@ -28,6 +28,17 @@ TELEGRAM_TOKEN="TU_TOKEN"
 TELEGRAM_CHAT="TU_CHAT"
 
 ####################################
+# ALEXA ALERTS
+####################################
+
+ALEXA_ENABLED=True
+
+# aqui pondremos el endpoint despues
+ALEXA_EVENT_URL="https://tu_backend/alexa_event"
+
+last_alexa_time=0
+
+####################################
 # ALERT LIMITS
 ####################################
 
@@ -62,7 +73,7 @@ test_sent=False
 app=Flask(__name__)
 
 ####################################
-# ALERT EVENT (centralizado)
+# ALERT EVENT
 ####################################
 
 def alert_event(msg):
@@ -71,9 +82,7 @@ def alert_event(msg):
 
     send_telegram(msg)
 
-    # aqui luego puedes agregar:
-    # alexa announcement
-    # llamada telefonica
+    send_alexa(msg)
 
 ####################################
 # TELEGRAM
@@ -111,6 +120,40 @@ def send_telegram(msg):
     except Exception as e:
 
         print("Telegram error:",e)
+
+####################################
+# ALEXA ALERTS
+####################################
+
+def send_alexa(msg):
+
+    global last_alexa_time
+
+    if not ALEXA_ENABLED:
+        return
+
+    if time.time()-last_alexa_time < 20:
+        return
+
+    try:
+
+        requests.post(
+
+            ALEXA_EVENT_URL,
+
+            json={
+                "message":msg
+            },
+
+            timeout=5
+
+        )
+
+        last_alexa_time=time.time()
+
+    except Exception as e:
+
+        print("Alexa error:",e)
 
 ####################################
 # STORAGE
@@ -242,7 +285,7 @@ def on_message(client,userdata,msg):
         if level>=FULL_LEVEL and not last_full_state:
 
             alert_event(
-            "Tinaco lleno 100 por ciento"
+            "Tinaco lleno"
             )
 
             last_full_state=True
@@ -258,7 +301,7 @@ def on_message(client,userdata,msg):
         if level<=LOW_LEVEL and not last_low_state:
 
             alert_event(
-            f"Nivel bajo {level} por ciento"
+            f"Nivel bajo {level}%"
             )
 
             last_low_state=True
@@ -274,7 +317,7 @@ def on_message(client,userdata,msg):
         if level<=CRITICAL_LEVEL and not last_critical_state:
 
             alert_event(
-            f"Nivel crítico {level} por ciento"
+            f"Nivel crítico {level}%"
             )
 
             last_critical_state=True
@@ -445,7 +488,7 @@ def build_speech():
     return speech
 
 ####################################
-# ALEXA
+# ALEXA RESPONSE
 ####################################
 
 def alexa_response(text):
