@@ -21,29 +21,37 @@ MQTT_TOPIC="tinaco/enrique/status"
 
 DATA_FILE="last.json"
 
+####################################
+# TELEGRAM
+####################################
+
 TELEGRAM_ENABLED=True
 
 TELEGRAM_TOKEN="TU_TOKEN"
 
 TELEGRAM_CHAT="TU_CHAT"
 
+TELEGRAM_COOLDOWN=10
+
 ####################################
-# ALEXA ALERTS
+# ALEXA EVENTS
 ####################################
 
 ALEXA_ENABLED=True
 
-# aqui pondremos el endpoint despues
-ALEXA_EVENT_URL="https://tu_backend/alexa_event"
+# mismo backend (loop interno)
+ALEXA_EVENT_URL="https://TU_RENDER_URL/alexa_event"
 
-last_alexa_time=0
+ALEXA_COOLDOWN=20
 
 ####################################
-# ALERT LIMITS
+# LIMITS
 ####################################
 
 LOW_LEVEL=20
+
 CRITICAL_LEVEL=10
+
 FULL_LEVEL=100
 
 ####################################
@@ -64,21 +72,25 @@ last_critical_state=False
 
 last_full_state=False
 
-last_comm_state=False
-
 last_alert_time=0
 
+last_alexa_time=0
+
 test_sent=False
+
+####################################
+# APP
+####################################
 
 app=Flask(__name__)
 
 ####################################
-# ALERT EVENT
+# CENTRAL EVENT ENGINE
 ####################################
 
 def alert_event(msg):
 
-    print("ALERT:",msg)
+    print("EVENT:",msg)
 
     send_telegram(msg)
 
@@ -95,7 +107,7 @@ def send_telegram(msg):
     if not TELEGRAM_ENABLED:
         return
 
-    if time.time()-last_alert_time<10:
+    if time.time()-last_alert_time < TELEGRAM_COOLDOWN:
         return
 
     try:
@@ -107,8 +119,11 @@ def send_telegram(msg):
             url,
 
             params={
+
                 "chat_id":TELEGRAM_CHAT,
+
                 "text":msg
+
             },
 
             timeout=5
@@ -122,7 +137,7 @@ def send_telegram(msg):
         print("Telegram error:",e)
 
 ####################################
-# ALEXA ALERTS
+# ALEXA EVENTS
 ####################################
 
 def send_alexa(msg):
@@ -132,7 +147,7 @@ def send_alexa(msg):
     if not ALEXA_ENABLED:
         return
 
-    if time.time()-last_alexa_time < 20:
+    if time.time()-last_alexa_time < ALEXA_COOLDOWN:
         return
 
     try:
@@ -142,7 +157,9 @@ def send_alexa(msg):
             ALEXA_EVENT_URL,
 
             json={
+
                 "message":msg
+
             },
 
             timeout=5
@@ -212,15 +229,17 @@ def normalize(data):
     }
 
 ####################################
-# MQTT
+# MQTT MESSAGE
 ####################################
 
 def on_message(client,userdata,msg):
 
-    global last_data,last_pump_state
+    global last_data
+    global last_pump_state
     global last_low_state
     global last_critical_state
     global last_full_state
+    global test_sent
 
     try:
 
@@ -241,11 +260,9 @@ def on_message(client,userdata,msg):
 # FIRST CONNECT
 ####################################
 
-        global test_sent
-
         if not test_sent:
 
-            alert_event("Tinaco conectado")
+            alert_event("Sistema tinaco conectado")
 
             test_sent=True
 
@@ -264,13 +281,17 @@ def on_message(client,userdata,msg):
             if pump=="ON":
 
                 alert_event(
-                f"Bomba encendida. Nivel {norm['level']}%"
+
+                f"Bomba encendida. Nivel {norm['level']} por ciento"
+
                 )
 
             else:
 
                 alert_event(
-                f"Bomba apagada. Nivel {norm['level']}%"
+
+                f"Bomba apagada. Nivel {norm['level']} por ciento"
+
                 )
 
             last_pump_state=pump
@@ -281,11 +302,16 @@ def on_message(client,userdata,msg):
 
         level=norm["level"]
 
-        # FULL
+####################################
+# FULL
+####################################
+
         if level>=FULL_LEVEL and not last_full_state:
 
             alert_event(
+
             "Tinaco lleno"
+
             )
 
             last_full_state=True
@@ -301,7 +327,9 @@ def on_message(client,userdata,msg):
         if level<=LOW_LEVEL and not last_low_state:
 
             alert_event(
-            f"Nivel bajo {level}%"
+
+            f"Nivel bajo {level} por ciento"
+
             )
 
             last_low_state=True
@@ -317,7 +345,9 @@ def on_message(client,userdata,msg):
         if level<=CRITICAL_LEVEL and not last_critical_state:
 
             alert_event(
-            f"Nivel crítico {level}%"
+
+            f"Nivel crítico {level} por ciento"
+
             )
 
             last_critical_state=True
@@ -327,13 +357,15 @@ def on_message(client,userdata,msg):
             last_critical_state=False
 
 ####################################
-# WIFI
+# WIFI EVENT
 ####################################
 
         if norm["wifi"]<-80:
 
             alert_event(
+
             "Señal WiFi débil"
+
             )
 
         print("MQTT:",norm)
@@ -343,7 +375,7 @@ def on_message(client,userdata,msg):
         print("MQTT error:",e)
 
 ####################################
-# CONNECT
+# MQTT CONNECT
 ####################################
 
 def on_connect(client,userdata,flags,rc):
@@ -355,7 +387,7 @@ def on_connect(client,userdata,flags,rc):
         client.subscribe(MQTT_TOPIC)
 
 ####################################
-# LOOP
+# MQTT LOOP
 ####################################
 
 def mqtt_loop():
@@ -367,14 +399,24 @@ def mqtt_loop():
             print("MQTT connecting")
 
             client=mqtt.Client(
+
                 mqtt.CallbackAPIVersion.VERSION1
+
             )
 
             client.on_connect=on_connect
 
             client.on_message=on_message
 
-            client.connect(MQTT_BROKER,1883,60)
+            client.connect(
+
+                MQTT_BROKER,
+
+                1883,
+
+                60
+
+            )
 
             client.loop_forever()
 
@@ -430,7 +472,7 @@ def get_state():
     return None
 
 ####################################
-# SPEECH
+# SPEECH BUILDER
 ####################################
 
 def build_speech():
@@ -439,31 +481,31 @@ def build_speech():
 
     if data is None:
 
-        return "Sistema activo pero sin datos."
+        return "Sistema activo sin datos"
 
     elapsed=int(time.time()-data["server_time"])
 
     if elapsed<45:
 
-        state="Sistema normal."
+        state="Sistema normal"
 
     elif elapsed<90:
 
-        state="Sistema atrasado."
+        state="Sistema atrasado"
 
     else:
 
-        state="Sistema sin comunicación."
+        state="Sistema sin comunicación"
 
 ####################################
-# TIME MEXICO
+# TIME
 ####################################
 
     local_time=datetime.fromtimestamp(
 
-    data["server_time"],
+        data["server_time"],
 
-    ZoneInfo("America/Mexico_City")
+        ZoneInfo("America/Mexico_City")
 
     )
 
@@ -521,7 +563,7 @@ def alexa_response(text):
 
 def home():
 
-    return "Tinaco Alexa bridge OK"
+    return "Tinaco backend OK"
 
 @app.route("/debug")
 
@@ -536,6 +578,22 @@ def tinaco():
     return alexa_response(build_speech())
 
 ####################################
+# ALEXA EVENT ENDPOINT
+####################################
+
+@app.route("/alexa_event",methods=["POST"])
+
+def alexa_event():
+
+    data=request.json
+
+    msg=data.get("message","Alerta tinaco")
+
+    print("Alexa trigger:",msg)
+
+    return {"ok":True}
+
+####################################
 # MAIN
 ####################################
 
@@ -545,6 +603,10 @@ if __name__=="__main__":
 
         host="0.0.0.0",
 
-        port=int(os.environ.get("PORT",5000))
+        port=int(
+
+            os.environ.get("PORT",5000)
+
+        )
 
     )
