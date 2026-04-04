@@ -302,24 +302,26 @@ def build_speech():
     elapsed=int(time.time()-data["server_time"])
 
 ####################################
-# DATA AGE
+# STATE LIKE HTML
 ####################################
 
-    if elapsed<20:
+    if elapsed<45:
 
-        time_text=f"Lectura hace {elapsed} segundos."
+        state="Sistema normal."
 
-    elif elapsed<60:
+        time_text=f"Última lectura hace {elapsed} segundos."
 
-        time_text=f"Lectura hace {elapsed} segundos."
+    elif elapsed<90:
 
-    elif elapsed<180:
+        state="Sistema atrasado."
 
         time_text=f"Última lectura hace {elapsed} segundos."
 
     else:
 
-        time_text="Datos antiguos."
+        state="Sistema sin comunicación."
+
+        time_text=f"Última lectura hace {elapsed} segundos."
 
         send_telegram(
         "⚠️ Tinaco sin comunicación reciente"
@@ -350,6 +352,8 @@ def build_speech():
     speech+=f" Señal wifi {data['wifi']} decibeles."
 
     speech+=f" Medido a las {hour}."
+
+    speech+=f" {state}"
 
     speech+=f" {time_text}"
 
