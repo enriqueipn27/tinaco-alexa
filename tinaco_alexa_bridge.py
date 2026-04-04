@@ -8,6 +8,9 @@ import threading
 import os
 import requests
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 ####################################
 # CONFIG
 ####################################
@@ -328,12 +331,15 @@ def build_speech():
         )
 
 ####################################
-# TIME STRING
+# TIME MEXICO
 ####################################
 
-    tm=time.localtime(data["server_time"])
+    local_time=datetime.fromtimestamp(
+    data["server_time"],
+    ZoneInfo("America/Mexico_City")
+    )
 
-    hour="%02d:%02d"%(tm[3],tm[4])
+    hour=local_time.strftime("%H:%M")
 
 ####################################
 # SPEECH BUILD
@@ -351,7 +357,7 @@ def build_speech():
 
     speech+=f" Señal wifi {data['wifi']} decibeles."
 
-    speech+=f" Medido a las {hour}."
+    speech+=f" Medido a las {hour} hora local."
 
     speech+=f" {state}"
 
