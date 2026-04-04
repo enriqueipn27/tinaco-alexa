@@ -8,17 +8,28 @@ import threading
 import os
 import uuid
 
+####################################
+# CONFIG
+####################################
+
 MQTT_BROKER="broker.hivemq.com"
 MQTT_TOPIC="tinaco/enrique/status"
 
 DATA_FILE="last.json"
 
+DEVICE_ID="sistema_tinaco_001"
+
+####################################
+# GLOBAL STATE
+####################################
+
 last_data=None
+
 data_lock=threading.Lock()
 
-app=Flask(__name__)
+mqtt_started=False
 
-DEVICE_ID="sistema_tinaco_001"
+app=Flask(__name__)
 
 ####################################
 # INTERPRETACION
@@ -82,7 +93,7 @@ def load_data():
         return None
 
 ####################################
-# MQTT
+# NORMALIZE
 ####################################
 
 def normalize(data):
@@ -104,6 +115,10 @@ def normalize(data):
     norm["server_time"]=time.time()
 
     return norm
+
+####################################
+# MQTT
+####################################
 
 def on_message(client,userdata,msg):
 
@@ -138,6 +153,10 @@ def on_connect(client,userdata,flags,rc):
 
         client.subscribe(MQTT_TOPIC)
 
+    else:
+
+        print("MQTT error",rc)
+
 def on_disconnect(client,userdata,rc):
 
     print("MQTT desconectado")
@@ -168,11 +187,22 @@ def mqtt_loop():
 
             time.sleep(5)
 
-thread=threading.Thread(target=mqtt_loop)
+def start_mqtt():
 
-thread.daemon=True
+    global mqtt_started
 
-thread.start()
+    if mqtt_started:
+        return
+
+    mqtt_started=True
+
+    thread=threading.Thread(target=mqtt_loop)
+
+    thread.daemon=True
+
+    thread.start()
+
+start_mqtt()
 
 ####################################
 # STATE
@@ -305,6 +335,7 @@ def health():
     data=get_state()
 
     if data:
+
         return {"status":"ok"}
 
     return {"status":"waiting_data"}
@@ -313,6 +344,8 @@ def health():
 def tinaco():
 
     try:
+
+        req=request.get_json(silent=True)
 
         speech=build_speech()
 
