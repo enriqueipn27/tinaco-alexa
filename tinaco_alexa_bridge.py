@@ -7,6 +7,7 @@ import time
 import threading
 import os
 import uuid
+import requests
 
 ####################################
 # CONFIG
@@ -19,6 +20,12 @@ DATA_FILE="last.json"
 
 DEVICE_ID="sistema_tinaco_001"
 
+# TELEGRAM (activar cuando quieras)
+TELEGRAM_ENABLED=False
+
+TELEGRAM_TOKEN="PUT_TOKEN"
+TELEGRAM_CHAT="PUT_CHAT_ID"
+
 ####################################
 # GLOBAL STATE
 ####################################
@@ -29,7 +36,35 @@ data_lock=threading.Lock()
 
 mqtt_started=False
 
+last_pump_state=None
+
 app=Flask(__name__)
+
+####################################
+# TELEGRAM
+####################################
+
+def send_telegram(msg):
+
+    if not TELEGRAM_ENABLED:
+        return
+
+    try:
+
+        url=f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+
+        requests.get(
+            url,
+            params={
+                "chat_id":TELEGRAM_CHAT,
+                "text":msg
+            },
+            timeout=3
+        )
+
+    except Exception as e:
+
+        print("Telegram error:",e)
 
 ####################################
 # INTERPRETACION
@@ -122,7 +157,7 @@ def normalize(data):
 
 def on_message(client,userdata,msg):
 
-    global last_data
+    global last_data,last_pump_state
 
     try:
 
@@ -138,6 +173,29 @@ def on_message(client,userdata,msg):
             last_data=norm
 
             save_data(norm)
+
+        # detectar cambio bomba
+        pump=norm["pump"]
+
+        if last_pump_state is None:
+
+            last_pump_state=pump
+
+        if pump!=last_pump_state:
+
+            if pump=="ON":
+
+                send_telegram(
+                f"🚰 Bomba ENCENDIDA\nNivel {norm['level']}%"
+                )
+
+            else:
+
+                send_telegram(
+                f"✅ Tinaco LLENO\nNivel {norm['level']}%"
+                )
+
+            last_pump_state=pump
 
         print("MQTT:",norm)
 
@@ -196,9 +254,10 @@ def start_mqtt():
 
     mqtt_started=True
 
-    thread=threading.Thread(target=mqtt_loop)
-
-    thread.daemon=True
+    thread=threading.Thread(
+        target=mqtt_loop,
+        daemon=True
+    )
 
     thread.start()
 
@@ -217,7 +276,13 @@ def get_state():
         if last_data:
             return last_data
 
-    return load_data()
+    data=load_data()
+
+    if data:
+
+        last_data=data
+
+    return data
 
 ####################################
 # SPEECH
@@ -229,33 +294,29 @@ def build_speech():
 
     if data is None:
 
-        return "Sistema tinaco activo pero aún sin datos recientes."
+        return "Sistema tinaco activo pero aún sin datos."
 
-    level=data.get("level",0)
+    level=data["level"]
 
-    pump=data.get("pump","OFF")
+    pump=data["pump"]
 
-    wifi=data.get("wifi",-100)
+    wifi=data["wifi"]
 
-    height=data.get("height",0)
+    height=data["height"]
 
-    liters=data.get("liters",0)
+    liters=data["liters"]
 
-    elapsed=int(time.time()-data.get("server_time",time.time()))
+    elapsed=int(time.time()-data["server_time"])
 
     level_text=interpret_level(level)
 
     wifi_text=interpret_wifi(wifi)
 
-    if elapsed<60:
+    if elapsed<90:
 
         time_text=f"Última lectura hace {elapsed} segundos."
 
-    elif elapsed<300:
-
-        time_text=f"Último dato hace {elapsed} segundos."
-
-    elif elapsed<1800:
+    elif elapsed<600:
 
         mins=int(elapsed/60)
 
@@ -263,7 +324,7 @@ def build_speech():
 
     else:
 
-        time_text="Último dato no reciente."
+        time_text="Datos no recientes."
 
     speech="Estado del tinaco."
 
@@ -343,176 +404,9 @@ def health():
 @app.route("/tinaco",methods=["POST"])
 def tinaco():
 
-    try:
+    speech=build_speech()
 
-        req=request.get_json(silent=True)
-
-        speech=build_speech()
-
-        return alexa_response(speech)
-
-    except Exception as e:
-
-        print(e)
-
-        return alexa_response("Error sistema tinaco")
-
-####################################
-# SMART HOME
-####################################
-
-@app.route("/smarthome",methods=["POST"])
-def smarthome():
-
-    req=request.get_json()
-
-    name=req["directive"]["header"]["name"]
-
-    if name=="Discover":
-
-        return discovery_response()
-
-    if name=="ReportState":
-
-        return report_state()
-
-    return {}
-
-def discovery_response():
-
-    return {
-
-        "event":{
-
-            "header":{
-
-                "namespace":"Alexa.Discovery",
-
-                "name":"Discover.Response",
-
-                "payloadVersion":"3",
-
-                "messageId":str(uuid.uuid4())
-
-            },
-
-            "payload":{
-
-                "endpoints":[
-
-                    {
-
-                        "endpointId":DEVICE_ID,
-
-                        "manufacturerName":"Enrique IoT",
-
-                        "friendlyName":"Sistema tinaco",
-
-                        "displayCategories":["SWITCH"],
-
-                        "capabilities":[
-
-                            {
-
-                                "type":"AlexaInterface",
-
-                                "interface":"Alexa",
-
-                                "version":"3"
-
-                            },
-
-                            {
-
-                                "type":"AlexaInterface",
-
-                                "interface":"Alexa.PowerController",
-
-                                "version":"3",
-
-                                "properties":{
-
-                                    "supported":[{"name":"powerState"}],
-
-                                    "retrievable":True
-
-                                }
-
-                            }
-
-                        ]
-
-                    }
-
-                ]
-
-            }
-
-        }
-
-    }
-
-def report_state():
-
-    data=get_state()
-
-    if data:
-
-        power=data["pump"]
-
-    else:
-
-        power="OFF"
-
-    return {
-
-        "context":{
-
-            "properties":[
-
-                {
-
-                    "namespace":"Alexa.PowerController",
-
-                    "name":"powerState",
-
-                    "value":power,
-
-                    "timeOfSample":time.strftime("%Y-%m-%dT%H:%M:%SZ",time.gmtime()),
-
-                    "uncertaintyInMilliseconds":500
-
-                }
-
-            ]
-
-        },
-
-        "event":{
-
-            "header":{
-
-                "namespace":"Alexa",
-
-                "name":"StateReport",
-
-                "payloadVersion":"3",
-
-                "messageId":str(uuid.uuid4())
-
-            },
-
-            "endpoint":{
-
-                "endpointId":DEVICE_ID
-
-            },
-
-            "payload":{}
-
-        }
-
-    }
+    return alexa_response(speech)
 
 ####################################
 # MAIN
