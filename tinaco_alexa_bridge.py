@@ -13,17 +13,19 @@ import requests
 ####################################
 
 MQTT_BROKER="broker.hivemq.com"
+
 MQTT_TOPIC="tinaco/enrique/status"
 
 DATA_FILE="last.json"
 
 TELEGRAM_ENABLED=True
 
-TELEGRAM_TOKEN="8771876521:AAHb-SxDYlQMt2BUm8TEzD7Epd5ViUQCHwk"
+TELEGRAM_TOKEN="TU_TOKEN"
 
-TELEGRAM_CHAT="8660553595"
+TELEGRAM_CHAT="TU_CHAT"
 
 MQTT_TIMEOUT=90
+
 MQTT_OLD=300
 
 ####################################
@@ -31,6 +33,7 @@ MQTT_OLD=300
 ####################################
 
 last_data=None
+
 data_lock=threading.Lock()
 
 mqtt_started=False
@@ -89,6 +92,7 @@ def save_data(data):
     try:
 
         with open(DATA_FILE,"w") as f:
+
             json.dump(data,f)
 
     except Exception as e:
@@ -100,6 +104,7 @@ def load_data():
     try:
 
         with open(DATA_FILE) as f:
+
             return json.load(f)
 
     except:
@@ -111,6 +116,12 @@ def load_data():
 ####################################
 
 def normalize(data):
+
+    ts=data.get("ts")
+
+    if ts is None:
+
+        ts=time.time()
 
     return {
 
@@ -124,7 +135,7 @@ def normalize(data):
 
         "wifi":int(data.get("w",-100)),
 
-        "server_time":time.time()
+        "server_time":ts
 
     }
 
@@ -160,6 +171,7 @@ def on_message(client,userdata,msg):
         pump=norm["pump"]
 
         if last_pump_state is None:
+
             last_pump_state=pump
 
         if pump!=last_pump_state:
@@ -289,21 +301,41 @@ def build_speech():
 
     elapsed=int(time.time()-data["server_time"])
 
-    if elapsed<MQTT_TIMEOUT:
+####################################
+# DATA AGE
+####################################
 
-        time_text="Datos recientes."
+    if elapsed<20:
 
-    elif elapsed<MQTT_OLD:
+        time_text=f"Lectura hace {elapsed} segundos."
 
-        time_text="Datos válidos."
+    elif elapsed<60:
+
+        time_text=f"Lectura hace {elapsed} segundos."
+
+    elif elapsed<180:
+
+        time_text=f"Última lectura hace {elapsed} segundos."
 
     else:
 
-        time_text="Sin comunicación reciente."
+        time_text="Datos antiguos."
 
         send_telegram(
-        "⚠️ Tinaco sin comunicación"
+        "⚠️ Tinaco sin comunicación reciente"
         )
+
+####################################
+# TIME STRING
+####################################
+
+    tm=time.localtime(data["server_time"])
+
+    hour="%02d:%02d"%(tm[3],tm[4])
+
+####################################
+# SPEECH BUILD
+####################################
 
     speech="Estado del tinaco."
 
@@ -315,7 +347,9 @@ def build_speech():
 
     speech+=f" Altura {round(data['height'],1)} centímetros."
 
-    speech+=f" Señal wifi {data['wifi']} dBm."
+    speech+=f" Señal wifi {data['wifi']} decibeles."
+
+    speech+=f" Medido a las {hour}."
 
     speech+=f" {time_text}"
 
@@ -352,16 +386,19 @@ def alexa_response(text):
 ####################################
 
 @app.route("/")
+
 def home():
 
     return "Tinaco Alexa bridge OK"
 
 @app.route("/debug")
+
 def debug():
 
     return jsonify(get_state())
 
 @app.route("/tinaco",methods=["POST"])
+
 def tinaco():
 
     return alexa_response(build_speech())
