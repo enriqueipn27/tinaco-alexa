@@ -27,9 +27,13 @@ TELEGRAM_TOKEN="TU_TOKEN"
 
 TELEGRAM_CHAT="TU_CHAT"
 
-MQTT_TIMEOUT=90
+####################################
+# ALERT LIMITS
+####################################
 
-MQTT_OLD=300
+LOW_LEVEL=20
+CRITICAL_LEVEL=10
+FULL_LEVEL=100
 
 ####################################
 # GLOBAL
@@ -43,11 +47,33 @@ mqtt_started=False
 
 last_pump_state=None
 
+last_low_state=False
+
+last_critical_state=False
+
+last_full_state=False
+
+last_comm_state=False
+
 last_alert_time=0
 
 test_sent=False
 
 app=Flask(__name__)
+
+####################################
+# ALERT EVENT (centralizado)
+####################################
+
+def alert_event(msg):
+
+    print("ALERT:",msg)
+
+    send_telegram(msg)
+
+    # aqui luego puedes agregar:
+    # alexa announcement
+    # llamada telefonica
 
 ####################################
 # TELEGRAM
@@ -148,7 +174,10 @@ def normalize(data):
 
 def on_message(client,userdata,msg):
 
-    global last_data,last_pump_state,test_sent
+    global last_data,last_pump_state
+    global last_low_state
+    global last_critical_state
+    global last_full_state
 
     try:
 
@@ -165,11 +194,21 @@ def on_message(client,userdata,msg):
 
             save_data(norm)
 
+####################################
+# FIRST CONNECT
+####################################
+
+        global test_sent
+
         if not test_sent:
 
-            send_telegram("Tinaco conectado ✅")
+            alert_event("Tinaco conectado")
 
             test_sent=True
+
+####################################
+# PUMP EVENTS
+####################################
 
         pump=norm["pump"]
 
@@ -181,28 +220,77 @@ def on_message(client,userdata,msg):
 
             if pump=="ON":
 
-                send_telegram(
-                f"🚰 Bomba ENCENDIDA\nNivel {norm['level']}%"
+                alert_event(
+                f"Bomba encendida. Nivel {norm['level']}%"
                 )
 
             else:
 
-                send_telegram(
-                f"✅ Tinaco LLENO\nNivel {norm['level']}%"
+                alert_event(
+                f"Bomba apagada. Nivel {norm['level']}%"
                 )
 
             last_pump_state=pump
 
-        if norm["level"]<20:
+####################################
+# LEVEL EVENTS
+####################################
 
-            send_telegram(
-            f"⚠️ Nivel crítico {norm['level']}%"
+        level=norm["level"]
+
+        # FULL
+        if level>=FULL_LEVEL and not last_full_state:
+
+            alert_event(
+            "Tinaco lleno 100 por ciento"
             )
+
+            last_full_state=True
+
+        if level<98:
+
+            last_full_state=False
+
+####################################
+# LOW
+####################################
+
+        if level<=LOW_LEVEL and not last_low_state:
+
+            alert_event(
+            f"Nivel bajo {level} por ciento"
+            )
+
+            last_low_state=True
+
+        if level>LOW_LEVEL+5:
+
+            last_low_state=False
+
+####################################
+# CRITICAL
+####################################
+
+        if level<=CRITICAL_LEVEL and not last_critical_state:
+
+            alert_event(
+            f"Nivel crítico {level} por ciento"
+            )
+
+            last_critical_state=True
+
+        if level>CRITICAL_LEVEL+5:
+
+            last_critical_state=False
+
+####################################
+# WIFI
+####################################
 
         if norm["wifi"]<-80:
 
-            send_telegram(
-            "📡 Señal WiFi débil"
+            alert_event(
+            "Señal WiFi débil"
             )
 
         print("MQTT:",norm)
@@ -211,6 +299,10 @@ def on_message(client,userdata,msg):
 
         print("MQTT error:",e)
 
+####################################
+# CONNECT
+####################################
+
 def on_connect(client,userdata,flags,rc):
 
     if rc==0:
@@ -218,6 +310,10 @@ def on_connect(client,userdata,flags,rc):
         print("MQTT conectado")
 
         client.subscribe(MQTT_TOPIC)
+
+####################################
+# LOOP
+####################################
 
 def mqtt_loop():
 
@@ -304,45 +400,34 @@ def build_speech():
 
     elapsed=int(time.time()-data["server_time"])
 
-####################################
-# STATE LIKE HTML
-####################################
-
     if elapsed<45:
 
         state="Sistema normal."
-
-        time_text=f"Última lectura hace {elapsed} segundos."
 
     elif elapsed<90:
 
         state="Sistema atrasado."
 
-        time_text=f"Última lectura hace {elapsed} segundos."
-
     else:
 
         state="Sistema sin comunicación."
-
-        time_text=f"Última lectura hace {elapsed} segundos."
-
-        send_telegram(
-        "⚠️ Tinaco sin comunicación reciente"
-        )
 
 ####################################
 # TIME MEXICO
 ####################################
 
     local_time=datetime.fromtimestamp(
+
     data["server_time"],
+
     ZoneInfo("America/Mexico_City")
+
     )
 
     hour=local_time.strftime("%H:%M")
 
 ####################################
-# SPEECH BUILD
+# SPEECH
 ####################################
 
     speech="Estado del tinaco."
@@ -353,15 +438,9 @@ def build_speech():
 
     speech+=f" Volumen {data['liters']} litros."
 
-    speech+=f" Altura {round(data['height'],1)} centímetros."
-
-    speech+=f" Señal wifi {data['wifi']} decibeles."
-
-    speech+=f" Medido a las {hour} hora local."
+    speech+=f" Medido a las {hour}."
 
     speech+=f" {state}"
-
-    speech+=f" {time_text}"
 
     return speech
 
