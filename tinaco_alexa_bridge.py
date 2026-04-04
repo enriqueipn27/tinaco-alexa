@@ -187,9 +187,7 @@ def get_state():
         if last_data:
             return last_data
 
-    data=load_data()
-
-    return data
+    return load_data()
 
 ####################################
 # SPEECH
@@ -201,53 +199,63 @@ def build_speech():
 
     if data is None:
 
-        return "Aún no recibo datos del tinaco"
+        return "Sistema tinaco activo pero aún sin datos recientes."
 
-    level=data["level"]
+    level=data.get("level",0)
 
-    pump=data["pump"]
+    pump=data.get("pump","OFF")
 
-    wifi=data["wifi"]
+    wifi=data.get("wifi",-100)
 
-    height=data["height"]
+    height=data.get("height",0)
 
-    liters=data["liters"]
+    liters=data.get("liters",0)
 
-    elapsed=int(time.time()-data["server_time"])
+    elapsed=int(time.time()-data.get("server_time",time.time()))
 
     level_text=interpret_level(level)
 
     wifi_text=interpret_wifi(wifi)
 
-    if elapsed<90:
+    if elapsed<60:
 
-        time_text=f"Última lectura hace {elapsed} segundos"
+        time_text=f"Última lectura hace {elapsed} segundos."
+
+    elif elapsed<300:
+
+        time_text=f"Último dato hace {elapsed} segundos."
+
+    elif elapsed<1800:
+
+        mins=int(elapsed/60)
+
+        time_text=f"Último dato hace {mins} minutos."
 
     else:
 
-        time_text="Datos no recientes"
+        time_text="Último dato no reciente."
 
-    speech=""
+    speech="Estado del tinaco."
 
     if pump=="ON":
 
-        speech+="La bomba está encendida."
+        speech+=" Bomba encendida."
 
     else:
 
-        speech+="La bomba está apagada."
+        speech+=" Bomba apagada."
 
     speech+=f" Nivel {level} por ciento."
 
-    speech+=f" Altura {round(height,1)} centímetros."
-
     speech+=f" Volumen {liters} litros."
+
+    speech+=f" Altura {round(height,1)} centímetros."
 
     speech+=f" Estado {level_text}."
 
     speech+=f" Señal wifi {wifi_text}."
 
-    speech+=f" {time_text}."
+    speech+=f" {time_text}"
 
     return speech
 
@@ -291,15 +299,20 @@ def debug():
 
     return jsonify(get_state())
 
+@app.route("/health")
+def health():
+
+    data=get_state()
+
+    if data:
+        return {"status":"ok"}
+
+    return {"status":"waiting_data"}
+
 @app.route("/tinaco",methods=["POST"])
 def tinaco():
 
     try:
-
-        req=request.get_json(silent=True)
-
-        if req:
-            print("Alexa request")
 
         speech=build_speech()
 
