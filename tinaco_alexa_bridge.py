@@ -19,14 +19,10 @@ DATA_FILE="last.json"
 
 TELEGRAM_ENABLED=True
 
-TELEGRAM_ENABLED=True
-
 TELEGRAM_TOKEN="8771876521:AAHb-SxDYlQMt2BUm8TEzD7Epd5ViUQCHwk"
 
 TELEGRAM_CHAT="8660553595"
 
-
-MQTT_PERIOD=31
 MQTT_TIMEOUT=90
 MQTT_OLD=300
 
@@ -42,7 +38,8 @@ mqtt_started=False
 last_pump_state=None
 
 last_alert_time=0
-last_mcu_seen=time.time()
+
+test_sent=False
 
 app=Flask(__name__)
 
@@ -57,7 +54,7 @@ def send_telegram(msg):
     if not TELEGRAM_ENABLED:
         return
 
-    if time.time()-last_alert_time<60:
+    if time.time()-last_alert_time<10:
         return
 
     try:
@@ -82,39 +79,6 @@ def send_telegram(msg):
     except Exception as e:
 
         print("Telegram error:",e)
-
-####################################
-# INTERPRETACION
-####################################
-
-def interpret_level(level):
-
-    if level>=80:
-        return "casi lleno"
-
-    if level>=60:
-        return "nivel alto"
-
-    if level>=40:
-        return "nivel medio"
-
-    if level>=20:
-        return "nivel bajo"
-
-    return "nivel crítico"
-
-def interpret_wifi(w):
-
-    if w>=-60:
-        return "excelente"
-
-    if w>=-70:
-        return "buena"
-
-    if w>=-80:
-        return "regular"
-
-    return "débil"
 
 ####################################
 # STORAGE
@@ -170,7 +134,7 @@ def normalize(data):
 
 def on_message(client,userdata,msg):
 
-    global last_data,last_pump_state,last_mcu_seen
+    global last_data,last_pump_state,test_sent
 
     try:
 
@@ -187,7 +151,11 @@ def on_message(client,userdata,msg):
 
             save_data(norm)
 
-        last_mcu_seen=time.time()
+        if not test_sent:
+
+            send_telegram("Tinaco conectado ✅")
+
+            test_sent=True
 
         pump=norm["pump"]
 
@@ -321,20 +289,6 @@ def build_speech():
 
     elapsed=int(time.time()-data["server_time"])
 
-    level=data["level"]
-
-    pump=data["pump"]
-
-    wifi=data["wifi"]
-
-    height=data["height"]
-
-    liters=data["liters"]
-
-    level_text=interpret_level(level)
-
-    wifi_text=interpret_wifi(wifi)
-
     if elapsed<MQTT_TIMEOUT:
 
         time_text="Datos recientes."
@@ -353,17 +307,15 @@ def build_speech():
 
     speech="Estado del tinaco."
 
-    speech+= " Bomba encendida." if pump=="ON" else " Bomba apagada."
+    speech+= " Bomba encendida." if data["pump"]=="ON" else " Bomba apagada."
 
-    speech+=f" Nivel {level} por ciento."
+    speech+=f" Nivel {data['level']} por ciento."
 
-    speech+=f" Volumen {liters} litros."
+    speech+=f" Volumen {data['liters']} litros."
 
-    speech+=f" Altura {round(height,1)} centímetros."
+    speech+=f" Altura {round(data['height'],1)} centímetros."
 
-    speech+=f" Estado {level_text}."
-
-    speech+=f" Señal wifi {wifi_text}."
+    speech+=f" Señal wifi {data['wifi']} dBm."
 
     speech+=f" {time_text}"
 
@@ -408,13 +360,6 @@ def home():
 def debug():
 
     return jsonify(get_state())
-
-@app.route("/health")
-def health():
-
-    data=get_state()
-
-    return {"status":"ok"} if data else {"status":"waiting"}
 
 @app.route("/tinaco",methods=["POST"])
 def tinaco():
