@@ -17,22 +17,28 @@ MQTT_TOPIC="tinaco/enrique/status"
 
 DATA_FILE="last.json"
 
-TELEGRAM_ENABLED=False
+TELEGRAM_ENABLED=True
 
 TELEGRAM_TOKEN="PUT_TOKEN"
 TELEGRAM_CHAT="PUT_CHAT_ID"
 
+MQTT_PERIOD=31
+MQTT_TIMEOUT=90
+MQTT_OLD=300
+
 ####################################
-# GLOBAL STATE
+# GLOBAL
 ####################################
 
 last_data=None
-
 data_lock=threading.Lock()
 
 mqtt_started=False
 
 last_pump_state=None
+
+last_alert_time=0
+last_mcu_seen=time.time()
 
 app=Flask(__name__)
 
@@ -42,7 +48,12 @@ app=Flask(__name__)
 
 def send_telegram(msg):
 
+    global last_alert_time
+
     if not TELEGRAM_ENABLED:
+        return
+
+    if time.time()-last_alert_time<60:
         return
 
     try:
@@ -54,16 +65,15 @@ def send_telegram(msg):
             url,
 
             params={
-
                 "chat_id":TELEGRAM_CHAT,
-
                 "text":msg
-
             },
 
-            timeout=3
+            timeout=5
 
         )
+
+        last_alert_time=time.time()
 
     except Exception as e:
 
@@ -111,7 +121,6 @@ def save_data(data):
     try:
 
         with open(DATA_FILE,"w") as f:
-
             json.dump(data,f)
 
     except Exception as e:
@@ -123,7 +132,6 @@ def load_data():
     try:
 
         with open(DATA_FILE) as f:
-
             return json.load(f)
 
     except:
@@ -148,8 +156,6 @@ def normalize(data):
 
         "wifi":int(data.get("w",-100)),
 
-        "mcu_time":data.get("t",0),
-
         "server_time":time.time()
 
     }
@@ -160,7 +166,7 @@ def normalize(data):
 
 def on_message(client,userdata,msg):
 
-    global last_data,last_pump_state
+    global last_data,last_pump_state,last_mcu_seen
 
     try:
 
@@ -177,10 +183,11 @@ def on_message(client,userdata,msg):
 
             save_data(norm)
 
+        last_mcu_seen=time.time()
+
         pump=norm["pump"]
 
         if last_pump_state is None:
-
             last_pump_state=pump
 
         if pump!=last_pump_state:
@@ -198,6 +205,18 @@ def on_message(client,userdata,msg):
                 )
 
             last_pump_state=pump
+
+        if norm["level"]<20:
+
+            send_telegram(
+            f"⚠️ Nivel crítico {norm['level']}%"
+            )
+
+        if norm["wifi"]<-80:
+
+            send_telegram(
+            "📡 Señal WiFi débil"
+            )
 
         print("MQTT:",norm)
 
@@ -294,7 +313,9 @@ def build_speech():
 
     if data is None:
 
-        return "Sistema activo pero aún sin datos."
+        return "Sistema activo pero sin datos."
+
+    elapsed=int(time.time()-data["server_time"])
 
     level=data["level"]
 
@@ -306,23 +327,25 @@ def build_speech():
 
     liters=data["liters"]
 
-    elapsed=int(time.time()-data["server_time"])
-
     level_text=interpret_level(level)
 
     wifi_text=interpret_wifi(wifi)
 
-    if elapsed<120:
+    if elapsed<MQTT_TIMEOUT:
 
         time_text="Datos recientes."
 
-    elif elapsed<600:
+    elif elapsed<MQTT_OLD:
 
         time_text="Datos válidos."
 
     else:
 
-        time_text="Datos antiguos."
+        time_text="Sin comunicación reciente."
+
+        send_telegram(
+        "⚠️ Tinaco sin comunicación"
+        )
 
     speech="Estado del tinaco."
 
@@ -343,7 +366,7 @@ def build_speech():
     return speech
 
 ####################################
-# ALEXA RESPONSE
+# ALEXA
 ####################################
 
 def alexa_response(text):
