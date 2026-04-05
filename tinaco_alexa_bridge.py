@@ -8,9 +8,6 @@ import threading
 import os
 import requests
 
-from datetime import datetime
-from zoneinfo import ZoneInfo
-
 ####################################
 # CONFIG
 ####################################
@@ -25,13 +22,13 @@ DATA_FILE="last.json"
 # TELEGRAM
 ####################################
 
-TELEGRAM_ENABLED=True
+TELEGRAM_ENABLED=False
 
-TELEGRAM_TOKEN="TU_TOKEN"
+TELEGRAM_TOKEN="TOKEN"
 
-TELEGRAM_CHAT="TU_CHAT"
+TELEGRAM_CHAT="CHAT"
 
-TELEGRAM_COOLDOWN=10
+TELEGRAM_COOLDOWN=30
 
 ####################################
 # AWS ALEXA EVENTS
@@ -75,8 +72,6 @@ last_alert_time=0
 
 last_alexa_time=0
 
-test_sent=False
-
 ####################################
 # APP
 ####################################
@@ -84,7 +79,7 @@ test_sent=False
 app=Flask(__name__)
 
 ####################################
-# CENTRAL EVENT ENGINE
+# ALERT ENGINE
 ####################################
 
 def alert_event(msg):
@@ -93,7 +88,7 @@ def alert_event(msg):
 
     send_telegram(msg)
 
-    send_alexa(msg)
+    send_alexa_event(msg)
 
 ####################################
 # TELEGRAM
@@ -139,7 +134,7 @@ def send_telegram(msg):
 # AWS EVENTS
 ####################################
 
-def send_alexa(msg):
+def send_alexa_event(msg):
 
     global last_alexa_time
 
@@ -171,7 +166,7 @@ def send_alexa(msg):
 
         )
 
-        print("AWS alert sent:",msg)
+        print("AWS event:",msg)
 
         last_alexa_time=time.time()
 
@@ -246,7 +241,6 @@ def on_message(client,userdata,msg):
     global last_low_state
     global last_critical_state
     global last_full_state
-    global test_sent
 
     try:
 
@@ -262,16 +256,6 @@ def on_message(client,userdata,msg):
             last_data=dict(norm)
 
             save_data(norm)
-
-####################################
-# FIRST CONNECT
-####################################
-
-        if not test_sent:
-
-            alert_event("Sistema tinaco conectado")
-
-            test_sent=True
 
 ####################################
 # PUMP EVENTS
@@ -350,14 +334,6 @@ def on_message(client,userdata,msg):
         if level>CRITICAL_LEVEL+5:
 
             last_critical_state=False
-
-####################################
-# WIFI EVENT
-####################################
-
-        if norm["wifi"]<-80:
-
-            alert_event("Señal WiFi débil")
 
         print("MQTT:",norm)
 
@@ -467,16 +443,70 @@ def get_state():
 ####################################
 
 @app.route("/")
-
 def home():
 
-    return "Tinaco backend AWS OK"
+    return "Tinaco backend running"
+
+@app.route("/health")
+def health():
+
+    return "OK"
 
 @app.route("/debug")
-
 def debug():
 
     return jsonify(get_state())
+
+####################################
+# ALEXA QUERY
+####################################
+
+@app.route("/alexa",methods=["POST"])
+def alexa():
+
+    state=get_state()
+
+    if not state:
+
+        speech="No tengo datos del tinaco"
+
+    else:
+
+        level=state["level"]
+
+        liters=state["liters"]
+
+        pump=state["pump"]
+
+        speech=(
+
+        f"El tinaco está al {level} por ciento. "
+
+        f"Hay {liters} litros. "
+
+        f"La bomba está {pump.lower()}"
+
+        )
+
+    return jsonify({
+
+        "version":"1.0",
+
+        "response":{
+
+            "outputSpeech":{
+
+                "type":"PlainText",
+
+                "text":speech
+
+            },
+
+            "shouldEndSession":True
+
+        }
+
+    })
 
 ####################################
 # MAIN
