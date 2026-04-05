@@ -34,13 +34,12 @@ TELEGRAM_CHAT="TU_CHAT"
 TELEGRAM_COOLDOWN=10
 
 ####################################
-# ALEXA EVENTS
+# AWS ALEXA EVENTS
 ####################################
 
 ALEXA_ENABLED=True
 
-# mismo backend (loop interno)
-ALEXA_EVENT_URL="https://TU_RENDER_URL/alexa_event"
+AWS_URL="https://vgnigchmrsauphzvmih2tqym5m0pphqe.lambda-url.us-east-1.on.aws/"
 
 ALEXA_COOLDOWN=20
 
@@ -137,7 +136,7 @@ def send_telegram(msg):
         print("Telegram error:",e)
 
 ####################################
-# ALEXA EVENTS
+# AWS EVENTS
 ####################################
 
 def send_alexa(msg):
@@ -152,25 +151,33 @@ def send_alexa(msg):
 
     try:
 
+        payload={
+
+            "msg":msg,
+
+            "source":"tinaco",
+
+            "time":time.time()
+
+        }
+
         requests.post(
 
-            ALEXA_EVENT_URL,
+            AWS_URL,
 
-            json={
-
-                "message":msg
-
-            },
+            json=payload,
 
             timeout=5
 
         )
 
+        print("AWS alert sent:",msg)
+
         last_alexa_time=time.time()
 
     except Exception as e:
 
-        print("Alexa error:",e)
+        print("AWS error:",e)
 
 ####################################
 # STORAGE
@@ -308,11 +315,7 @@ def on_message(client,userdata,msg):
 
         if level>=FULL_LEVEL and not last_full_state:
 
-            alert_event(
-
-            "Tinaco lleno"
-
-            )
+            alert_event("Tinaco lleno")
 
             last_full_state=True
 
@@ -326,11 +329,7 @@ def on_message(client,userdata,msg):
 
         if level<=LOW_LEVEL and not last_low_state:
 
-            alert_event(
-
-            f"Nivel bajo {level} por ciento"
-
-            )
+            alert_event(f"Nivel bajo {level} por ciento")
 
             last_low_state=True
 
@@ -344,11 +343,7 @@ def on_message(client,userdata,msg):
 
         if level<=CRITICAL_LEVEL and not last_critical_state:
 
-            alert_event(
-
-            f"Nivel crítico {level} por ciento"
-
-            )
+            alert_event(f"Nivel crítico {level} por ciento")
 
             last_critical_state=True
 
@@ -362,11 +357,7 @@ def on_message(client,userdata,msg):
 
         if norm["wifi"]<-80:
 
-            alert_event(
-
-            "Señal WiFi débil"
-
-            )
+            alert_event("Señal WiFi débil")
 
         print("MQTT:",norm)
 
@@ -472,90 +463,6 @@ def get_state():
     return None
 
 ####################################
-# SPEECH BUILDER
-####################################
-
-def build_speech():
-
-    data=get_state()
-
-    if data is None:
-
-        return "Sistema activo sin datos"
-
-    elapsed=int(time.time()-data["server_time"])
-
-    if elapsed<45:
-
-        state="Sistema normal"
-
-    elif elapsed<90:
-
-        state="Sistema atrasado"
-
-    else:
-
-        state="Sistema sin comunicación"
-
-####################################
-# TIME
-####################################
-
-    local_time=datetime.fromtimestamp(
-
-        data["server_time"],
-
-        ZoneInfo("America/Mexico_City")
-
-    )
-
-    hour=local_time.strftime("%H:%M")
-
-####################################
-# SPEECH
-####################################
-
-    speech="Estado del tinaco."
-
-    speech+= " Bomba encendida." if data["pump"]=="ON" else " Bomba apagada."
-
-    speech+=f" Nivel {data['level']} por ciento."
-
-    speech+=f" Volumen {data['liters']} litros."
-
-    speech+=f" Medido a las {hour}."
-
-    speech+=f" {state}"
-
-    return speech
-
-####################################
-# ALEXA RESPONSE
-####################################
-
-def alexa_response(text):
-
-    return {
-
-        "version":"1.0",
-
-        "response":{
-
-            "outputSpeech":{
-
-                "type":"PlainText",
-
-                "text":text
-
-            },
-
-            "shouldEndSession":True
-
-        }
-
-    }
-
-####################################
 # ROUTES
 ####################################
 
@@ -563,35 +470,13 @@ def alexa_response(text):
 
 def home():
 
-    return "Tinaco backend OK"
+    return "Tinaco backend AWS OK"
 
 @app.route("/debug")
 
 def debug():
 
     return jsonify(get_state())
-
-@app.route("/tinaco",methods=["POST"])
-
-def tinaco():
-
-    return alexa_response(build_speech())
-
-####################################
-# ALEXA EVENT ENDPOINT
-####################################
-
-@app.route("/alexa_event",methods=["POST"])
-
-def alexa_event():
-
-    data=request.json
-
-    msg=data.get("message","Alerta tinaco")
-
-    print("Alexa trigger:",msg)
-
-    return {"ok":True}
 
 ####################################
 # MAIN
