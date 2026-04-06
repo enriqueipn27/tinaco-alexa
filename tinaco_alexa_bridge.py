@@ -129,12 +129,16 @@ def send_alexa_event(msg):
         return
 
     try:
-
         payload={
-            "msg":msg,
-            "source":"tinaco",
-            "time":time.time()
-        }
+
+        "type":"change",
+
+        "level":norm["level"],
+
+        "pump":norm["pump"]
+
+                }
+       
 
         requests.post(
             AWS_URL,
