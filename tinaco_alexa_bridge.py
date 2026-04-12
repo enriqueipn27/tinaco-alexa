@@ -424,16 +424,24 @@ def alexa():
     if not state:
         speech = "El sistema está iniciando, intenta en un minuto"
     else:
+        
         level = state["level"]
         liters = state["liters"]
         pump = state["pump"]
 
+        # 👇 PRIMERO lógica
+        if pump == "ON":
+            bomba_txt = "encendida"
+        else:
+            bomba_txt = "apagada"
+
+        # 👇 LUEGO el texto
         speech = (
             f"El tinaco está al {level} por ciento. "
             f"Hay {liters} litros. "
-            f"La bomba está en {pump.lower()}"
-        )
-
+            f"La bomba está {bomba_txt}"
+                )
+      
     return jsonify({
         "version": "1.0",
         "response": {
