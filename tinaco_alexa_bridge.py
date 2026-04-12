@@ -411,53 +411,35 @@ def debug():
 ####################################
 # ALEXA QUERY
 ####################################
-
-@app.route("/alexa",methods=["POST"])
-
+@app.route("/alexa", methods=["POST"])
 def alexa():
 
-    state=get_state()
+    global last_data
+
+    state = last_data.copy() if last_data else None
 
     if not state:
-
-        speech="No tengo datos del tinaco"
-
+        speech = "El sistema está iniciando, intenta en unos segundos"
     else:
+        level = state["level"]
+        liters = state["liters"]
+        pump = state["pump"]
 
-        level=state["level"]
-
-        liters=state["liters"]
-
-        pump=state["pump"]
-
-        speech=(
-
-        f"El tinaco está al {level} por ciento. "
-
-        f"Hay {liters} litros. "
-
-        f"La bomba está {pump.lower()}"
-
+        speech = (
+            f"El tinaco está al {level} por ciento. "
+            f"Hay {liters} litros. "
+            f"La bomba está {pump.lower()}"
         )
 
     return jsonify({
-
-        "version":"1.0",
-
-        "response":{
-
-            "outputSpeech":{
-
-                "type":"PlainText",
-
-                "text":speech
-
+        "version": "1.0",
+        "response": {
+            "outputSpeech": {
+                "type": "PlainText",
+                "text": speech
             },
-
-            "shouldEndSession":True
-
+            "shouldEndSession": True
         }
-
     })
 
 ####################################
