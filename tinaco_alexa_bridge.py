@@ -411,15 +411,18 @@ def debug():
 ####################################
 # ALEXA QUERY
 ####################################
+
 @app.route("/alexa", methods=["POST"])
 def alexa():
 
     global last_data
 
-    state = last_data.copy() if last_data else None
+    state = last_data.copy() if last_data else load_data()
+
+    print("Alexa state:", state)
 
     if not state:
-        speech = "El sistema está iniciando, intenta en unos segundos"
+        speech = "El sistema está iniciando, intenta en un minuto"
     else:
         level = state["level"]
         liters = state["liters"]
@@ -428,7 +431,7 @@ def alexa():
         speech = (
             f"El tinaco está al {level} por ciento. "
             f"Hay {liters} litros. "
-            f"La bomba está {pump.lower()}"
+            f"La bomba está en {pump.lower()}"
         )
 
     return jsonify({
