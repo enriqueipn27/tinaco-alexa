@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, redirect
 
 app = Flask(__name__)
 
@@ -9,13 +9,8 @@ def auth():
 
     print("AUTH REQUEST:", redirect_uri, state)
 
-    return f'''
-    <html>
-    <script>
-    window.location.href = "{redirect_uri}?state={state}&code=1234";
-    </script>
-    </html>
-    '''
+    return redirect(f"{redirect_uri}?state={state}&code=1234")
+
 
 @app.route("/token", methods=["POST"])
 def token():
@@ -24,6 +19,7 @@ def token():
         "token_type": "Bearer",
         "expires_in": 3600
     })
+
 
 @app.route("/debug")
 def debug():
