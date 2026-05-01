@@ -228,17 +228,30 @@ def debug():
 #################################################
 @app.route('/alexa', methods=['POST'])
 def alexa():
+    
     try:
+        
+    
         req = request.get_json()
         req_type = req['request']['type']
 
+
+        # El saludo inicial no debe depender de datos MQTT
+        if req_type == 'LaunchRequest':
+            return alexa_speak('Bienvenido a mi tinaco. Puedes preguntarme nivel, estado o alertas del agua.')
+
+        # Espera breve por si Render acaba de reiniciar y MQTT aún no llena devices
+        wait_count = 0
+        while 'enrique' not in devices and wait_count < 4:
+        
+            time.sleep(1)
+            wait_count += 1
+
         if 'enrique' not in devices:
+            
             return alexa_speak('Todavía no tengo datos suficientes del tinaco.')
 
         data = compute_alerts('enrique', devices['enrique'])
-
-        if req_type == 'LaunchRequest':
-            return alexa_speak('Bienvenido a mi tinaco. Puedes preguntarme nivel, estado o alertas del agua.')
 
         if req_type == 'IntentRequest':
             intent = req['request']['intent']['name']
@@ -254,7 +267,7 @@ def alexa():
             if intent == 'AlertaIntent':
                 return alexa_speak(data['speech'])
 
-            if intent in ['AMAZON.StopIntent','AMAZON.CancelIntent','AMAZON.NavigateHomeIntent']:
+            if intent in ['AMAZON.StopIntent', 'AMAZON.CancelIntent', 'AMAZON.NavigateHomeIntent']:
                 return alexa_speak('Hasta luego.', True)
 
         return alexa_speak('No entendí tu solicitud. Puedes preguntarme nivel, estado o alertas.')
@@ -262,6 +275,7 @@ def alexa():
     except Exception as e:
         print('ALEXA ERROR:', e)
         return alexa_speak('Ocurrió una falla temporal en mi tinaco.')
+
 
 #################################################
 # OAUTH
