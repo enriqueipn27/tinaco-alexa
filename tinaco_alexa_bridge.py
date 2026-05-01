@@ -7,7 +7,7 @@ import uuid
 import os
 
 app = Flask(__name__)
-
+mqtt_started = False
 MQTT_BROKER = "broker.hivemq.com"
 MQTT_PORT = 1883
 MQTT_TOPIC = "tinaco/+/status"
@@ -176,10 +176,16 @@ def mqtt_watchdog():
         except Exception as e:
             print("WATCHDOG ERROR:", e)
             time.sleep(5)
-
-start_mqtt_client()
-threading.Thread(target=mqtt_watchdog, daemon=True).start()
-
+#################################################
+# WORKER SAFE MQTT INIT
+#################################################
+def ensure_mqtt_started():
+    global mqtt_started
+    if not mqtt_started:
+        print("STARTING MQTT INSIDE WORKER")
+        start_mqtt_client()
+        threading.Thread(target=mqtt_watchdog, daemon=True).start()
+        mqtt_started = True
 #################################################
 
 #ALEXA RESPONSE HELPER
@@ -211,6 +217,7 @@ def alexa_speak(text, end=False):
 #################################################
 @app.route('/api/<device_id>')
 def api_device(device_id):
+    ensure_mqtt_started()
     device_id = device_id.lower()
     if device_id not in devices:
         return jsonify({"device": device_id,"status": "NO_DATA","speech": "Todavía no tengo historial suficiente de este tinaco."})
@@ -218,10 +225,11 @@ def api_device(device_id):
 
 @app.route('/debug')
 def debug():
-    out = {}
-    for d in devices:
-        out[d] = compute_alerts(d, devices[d])
-    return jsonify(out)
+        ensure_mqtt_started()
+        out = {}
+        for d in devices:
+            out[d] = compute_alerts(d, devices[d])
+        return jsonify(out)
 
 #################################################
 # ALEXA CUSTOM SKILL ENDPOINT
@@ -230,8 +238,7 @@ def debug():
 def alexa():
     
     try:
-        
-    
+        ensure_mqtt_started()
         req = request.get_json()
         print("DEVICES NOW:", devices)
         req_type = req['request']['type']
