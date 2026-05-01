@@ -22,7 +22,8 @@ auth_codes = {}
 access_tokens = {}
 refresh_tokens = {}
 last_alerts = {}
-mqtt_last_rx = 0
+mqtt_last_rx = int(time.time())
+mqtt_boot_time = int(time.time())
 mqtt_client = None
 
 #################################################
@@ -161,8 +162,9 @@ def mqtt_watchdog():
     global mqtt_client,mqtt_last_rx
     while True:
         try:
+            boot_age = int(time.time()) - mqtt_boot_time
             age = int(time.time()) - mqtt_last_rx
-            if age > 25:
+            if boot_age > 40 and age > 25:
                 print("MQTT WATCHDOG RECONNECT")
                 try:
                     mqtt_client.loop_stop()
