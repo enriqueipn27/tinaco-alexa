@@ -182,7 +182,7 @@ threading.Thread(target=mqtt_watchdog, daemon=True).start()
 
 #################################################
 
-ALEXA RESPONSE HELPER
+#ALEXA RESPONSE HELPER
 
 #################################################
 
@@ -205,12 +205,6 @@ def alexa_speak(text, end=False):
             "shouldEndSession": end
         }
     })
-
-#################################################
-
-# API
-
-#################################################
 
 #################################################
 # API
