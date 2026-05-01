@@ -179,6 +179,21 @@ start_mqtt_client()
 threading.Thread(target=mqtt_watchdog, daemon=True).start()
 
 #################################################
+# ALEXA RESPONSE HELPER
+#################################################
+def alexa_speak(text, end=False):
+    return jsonify({
+        "version": "1.0",
+        "response": {
+            "outputSpeech": {
+                "type": "PlainText",
+                "text": text
+            },
+            "shouldEndSession": end
+        }
+    })
+
+#################################################
 # API
 #################################################
 @app.route('/api/<device_id>')
@@ -194,6 +209,46 @@ def debug():
     for d in devices:
         out[d] = compute_alerts(d, devices[d])
     return jsonify(out)
+
+#################################################
+# ALEXA CUSTOM SKILL ENDPOINT
+#################################################
+@app.route('/alexa', methods=['POST'])
+def alexa():
+    try:
+        req = request.get_json()
+        req_type = req['request']['type']
+
+        if 'enrique' not in devices:
+            return alexa_speak('Todavía no tengo datos suficientes del tinaco.')
+
+        data = compute_alerts('enrique', devices['enrique'])
+
+        if req_type == 'LaunchRequest':
+            return alexa_speak('Bienvenido a mi tinaco. Puedes preguntarme nivel, estado o alertas del agua.')
+
+        if req_type == 'IntentRequest':
+            intent = req['request']['intent']['name']
+
+            if intent == 'NivelIntent':
+                texto = f"{data['speech']} El nivel actual es de {data['level']} por ciento, con aproximadamente {data['liters']} litros disponibles."
+                return alexa_speak(texto)
+
+            if intent == 'EstadoIntent':
+                texto = f"{data['speech']} La altura del agua es de {data['height']} centímetros y la señal wifi es {data['rssi']} decibeles."
+                return alexa_speak(texto)
+
+            if intent == 'AlertaIntent':
+                return alexa_speak(data['speech'])
+
+            if intent in ['AMAZON.StopIntent','AMAZON.CancelIntent','AMAZON.NavigateHomeIntent']:
+                return alexa_speak('Hasta luego.', True)
+
+        return alexa_speak('No entendí tu solicitud. Puedes preguntarme nivel, estado o alertas.')
+
+    except Exception as e:
+        print('ALEXA ERROR:', e)
+        return alexa_speak('Ocurrió una falla temporal en mi tinaco.')
 
 #################################################
 # OAUTH
@@ -247,6 +302,4 @@ def validate():
 
 @app.route('/')
 def home():
-    return 'Mi Tinaco Render FailSoft V2.2 activo'
-
-
+    return 'Mi Tinaco Render FailSoft V3 Alexa activo'
