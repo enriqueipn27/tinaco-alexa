@@ -233,6 +233,7 @@ def alexa():
         
     
         req = request.get_json()
+        print("DEVICES NOW:", devices)
         req_type = req['request']['type']
 
 
