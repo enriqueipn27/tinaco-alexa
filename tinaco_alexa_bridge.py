@@ -186,27 +186,19 @@ def ensure_mqtt_started():
         start_mqtt_client()
         threading.Thread(target=mqtt_watchdog, daemon=True).start()
         mqtt_started = True
-#################################################
-
-#ALEXA RESPONSE HELPER
 
 #################################################
-
+# ALEXA RESPONSE HELPER
+#################################################
 def alexa_speak(text, end=False):
-  
+
     return jsonify({
         "version": "1.0",
         "sessionAttributes": {},
         "response": {
-                "outputSpeech": {
+            "outputSpeech": {
                 "type": "PlainText",
                 "text": text
-            },
-            "reprompt": {
-                "outputSpeech": {
-                    "type": "PlainText",
-                    "text": "Puedes preguntarme por el nivel, estado o alertas del tinaco."
-                }
             },
             "shouldEndSession": end
         }
