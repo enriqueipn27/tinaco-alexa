@@ -250,11 +250,11 @@ def alexa():
 
         # Espera breve por si Render acaba de reiniciar y MQTT aún no llena devices
         wait_count = 0
-        while 'enrique' not in devices and wait_count < 4:
-        
+        while ('enrique' not in devices or devices.get('enrique', {}) == {}) and wait_count < 12:
             time.sleep(1)
             wait_count += 1
-
+            print("WAITING MQTT DATA...", wait_count, devices)
+        
         if 'enrique' not in devices:
             
             return alexa_speak('Todavía no tengo datos suficientes del tinaco.')
