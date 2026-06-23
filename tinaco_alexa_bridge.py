@@ -253,7 +253,7 @@ def alexa():
 
         if 'enrique' not in devices:            
 
-            return alexa_speak(No tengo una lectura reciente del tinaco.')
+            return alexa_speak('No tengo una lectura reciente del tinaco.')
 
         data = compute_alerts('enrique', devices['enrique'])
 
