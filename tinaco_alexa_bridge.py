@@ -240,16 +240,19 @@ def alexa():
         if req_type == 'LaunchRequest':
             return alexa_speak('Bienvenido a mi tinaco. Puedes preguntarme nivel, estado o alertas del agua.')
 
-        # Espera breve por si Render acaba de reiniciar y MQTT aún no llena devices
-        wait_count = 0
-        while ('enrique' not in devices or devices.get('enrique', {}) == {}) and wait_count < 12:
-            time.sleep(1)
-            wait_count += 1
-            print("WAITING MQTT DATA...", wait_count, devices)
-        
-        if 'enrique' not in devices:
-            
-            return alexa_speak('Todavía no tengo datos suficientes del tinaco.')
+	# Si MQTT aun no tiene datos en RAM,
+	# usamos la ultima lectura guardada
+
+	if 'enrique' not in devices:
+
+    	try:
+        	load_store()
+    	except:
+        	pass
+
+	if 'enrique' not in devices:
+
+    	return alexa_speak(No tengo una lectura reciente del tinaco.')
 
         data = compute_alerts('enrique', devices['enrique'])
 
