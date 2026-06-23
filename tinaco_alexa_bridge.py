@@ -240,19 +240,20 @@ def alexa():
         if req_type == 'LaunchRequest':
             return alexa_speak('Bienvenido a mi tinaco. Puedes preguntarme nivel, estado o alertas del agua.')
 
-	# Si MQTT aun no tiene datos en RAM,
-	# usamos la ultima lectura guardada
+        # Si MQTT aun no tiene datos en RAM,
+        # usamos la ultima lectura guardada
 
-	if 'enrique' not in devices:
+        if 'enrique' not in devices:
+            
+            try:
+                               
+                load_store()
+            except:
+                pass
 
-    	try:
-        	load_store()
-    	except:
-        	pass
+        if 'enrique' not in devices:            
 
-	if 'enrique' not in devices:
-
-    	return alexa_speak(No tengo una lectura reciente del tinaco.')
+            return alexa_speak(No tengo una lectura reciente del tinaco.')
 
         data = compute_alerts('enrique', devices['enrique'])
 
