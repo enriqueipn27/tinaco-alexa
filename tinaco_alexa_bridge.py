@@ -236,24 +236,26 @@ def alexa():
         req_type = req['request']['type']
 
 
-        # El saludo inicial no debe depender de datos MQTT
         if req_type == 'LaunchRequest':
-            return alexa_speak('Bienvenido a mi tinaco. Puedes preguntarme nivel, estado o alertas del agua.')
 
-        # Si MQTT aun no tiene datos en RAM,
-        # usamos la ultima lectura guardada
+    if 'enrique' in devices:
 
-        if 'enrique' not in devices:
-            
-            try:
-                               
-                load_store()
-            except:
-                pass
+        data = compute_alerts('enrique', devices['enrique'])
+        edad = int(time.time()) - data["server_time"]
+        texto = (
+            f"Bienvenido. "
+            f"El tinaco está al {data['level']} por ciento "
+            f"con aproximadamente {data['liters']} litros. "
+            f"La última lectura fue recibida hace {edad} segundos. "
+            f"{data['speech']} "
+            f"¿Deseas consultar algo más?"
+        )
 
-        if 'enrique' not in devices:            
+        return alexa_speak(texto)
 
-            return alexa_speak('No tengo una lectura reciente del tinaco.')
+    return alexa_speak(
+        'Bienvenido. Aún no tengo datos del tinaco.'
+    )
 
         data = compute_alerts('enrique', devices['enrique'])
 
@@ -261,7 +263,15 @@ def alexa():
             intent = req['request']['intent']['name']
 
             if intent == 'NivelIntent':
-                texto = f"{data['speech']} El nivel actual es de {data['level']} por ciento, con aproximadamente {data['liters']} litros disponibles."
+                edad = int(time.time()) - data["server_time"]
+                texto = (
+                    f"{data['speech']} "
+                    f"El nivel actual es de {data['level']} por ciento, "
+                    f"con aproximadamente {data['liters']} litros disponibles. "
+                    f"La última lectura fue recibida hace {edad} segundos."
+                )
+                
+                
                 return alexa_speak(texto)
 
             if intent == 'EstadoIntent':
