@@ -236,26 +236,30 @@ def alexa():
         req_type = req['request']['type']
 
 
-        if req_type == 'LaunchRequest':
+        if req_type == 'LaunchRequest':            
+            
+            if 'enrique' in devices:            
+                
 
-    if 'enrique' in devices:
+                data = compute_alerts('enrique', devices['enrique'])
+                edad = int(time.time()) - data["server_time"]
+                texto = (
+                    f"Bienvenido. "
+                    f"El tinaco está al {data['level']} por ciento "
+                    f"con aproximadamente {data['liters']} litros. "
+                    f"La última lectura fue recibida hace {edad} segundos. "
+                    f"{data['speech']} "
+                    f"¿Deseas consultar algo más?"
+                )
 
-        data = compute_alerts('enrique', devices['enrique'])
-        edad = int(time.time()) - data["server_time"]
-        texto = (
-            f"Bienvenido. "
-            f"El tinaco está al {data['level']} por ciento "
-            f"con aproximadamente {data['liters']} litros. "
-            f"La última lectura fue recibida hace {edad} segundos. "
-            f"{data['speech']} "
-            f"¿Deseas consultar algo más?"
-        )
+                return alexa_speak(texto)
+            else:
+                
+                
 
-        return alexa_speak(texto)
-
-    return alexa_speak(
-        'Bienvenido. Aún no tengo datos del tinaco.'
-    )
+                return alexa_speak(
+                    'Bienvenido. Aún no tengo datos del tinaco.'
+                )
 
         data = compute_alerts('enrique', devices['enrique'])
 
