@@ -227,12 +227,17 @@ def home():
     return "TINACO MQTT OK"
 
 
+
+import os
+
 @app.route("/debug")
 def debug():
-    print("DEBUG PID =", os.getpid())
-    print("DEBUG DEVICES =", devices)
 
-    return jsonify(devices)
+    return jsonify({
+        "pid": os.getpid(),
+        "devices_count": len(devices),
+        "devices": list(devices.keys())
+    })
 
 @app.route("/telegram_test")
 def telegram_test():
