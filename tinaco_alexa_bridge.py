@@ -5,6 +5,7 @@ import threading
 import time
 import traceback
 import requests
+import os
 
 #################################################
 # CONFIG
@@ -81,9 +82,8 @@ def on_message(client, userdata, msg):
 
     global devices
     global controls
-    global last_B
-    global last_fl
-    global last_low55
+    print("MQTT PID =", os.getpid())
+
 
     try:
 
@@ -98,10 +98,7 @@ def on_message(client, userdata, msg):
 
             devices[device_id] = payload
             devices[device_id]["server_time"] = int(time.time())
-            global last_fl
-            global last_low55
-
-            # SOLO ENRIQUE POR AHORA
+              # SOLO ENRIQUE POR AHORA
             if device_id == "enrique":
 
                 fl = payload.get("fl", 0)
@@ -232,6 +229,8 @@ def home():
 
 @app.route("/debug")
 def debug():
+    print("DEBUG PID =", os.getpid())
+    print("DEBUG DEVICES =", devices)
 
     return jsonify(devices)
 
@@ -278,6 +277,8 @@ def alexa_test(device_id):
 #######################################
 @app.route("/alexa", methods=["POST"])
 def alexa():
+    print("ALEXA PID =", os.getpid())
+    print("ALEXA DEVICES =", devices)
     
     try:
         
@@ -370,4 +371,5 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=10000
     )
+
 
