@@ -163,6 +163,12 @@ def start_mqtt_client():
         print("MQTT CLIENT ID:", id(mqtt_client))
         mqtt_client.on_connect = on_connect
         mqtt_client.on_message = on_message
+        def on_disconnect(client, userdata, rc):
+            
+            print("MQTT DISCONNECTED RC=", rc)
+
+        mqtt_client.on_disconnect = on_disconnect
+        
         mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
         print("CONNECT RETURNED OK")
         mqtt_client.loop_start()
@@ -395,5 +401,5 @@ def validate():
 
 ensure_mqtt_started()
 @app.route('/')
-def home():
+que cambio y en donde?def home():
     return 'Mi Tinaco Render FailSoft V3 Alexa activo'
