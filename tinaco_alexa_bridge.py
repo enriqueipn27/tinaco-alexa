@@ -131,7 +131,25 @@ def estado(device_id):
         })
 
     return jsonify(devices[device_id])
+    
+@app.route("/alexa_test/<device_id>")
+def alexa_test(device_id):
 
+    device_id = device_id.lower()
+
+    if device_id not in devices:
+        return "Aun no tengo datos del tinaco"
+
+    d = devices[device_id]
+
+    return (
+        f"El tinaco esta al "
+        f"{d.get('lvl',0)} por ciento, "
+        f"con aproximadamente "
+        f"{d.get('l',0)} litros. "
+        f"La temperatura es "
+        f"{d.get('t',0)} grados."
+    )
 
 #################################################
 # LOCAL TEST
