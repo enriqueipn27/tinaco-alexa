@@ -111,6 +111,7 @@ def compute_alerts(device_id, data):
 def on_connect(client, userdata, flags, rc):
     global mqtt_last_rx
     print("ON_CONNECT RC=", rc)
+    print("SUCRITO A:",MQTT_TOPIC)
     client.subscribe(MQTT_TOPIC)
     mqtt_last_rx = int(time.time())
 
@@ -118,6 +119,7 @@ def on_message(client, userdata, msg):
     global devices,mqtt_last_rx
     try:
         mqtt_last_rx = int(time.time())
+        print("TOPIC RX:", msg.topic)
         payload = json.loads(msg.payload.decode())
         topic_parts = msg.topic.split("/")
         device_id = topic_parts[1].lower()
