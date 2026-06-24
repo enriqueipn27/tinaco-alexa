@@ -243,17 +243,11 @@ def alexa():
         if req_type == 'LaunchRequest':
                     
             if 'enrique' not in devices:
-                        
-                time.sleep(2)
-
-                if 'enrique' not in devices:
-                    
-                            
-
-                    return alexa_speak(
-                        'Estoy iniciando la conexión con el tinaco. Intenta nuevamente en unos segundos.'
-                    )
-
+                
+                return alexa_speak(
+            'Aún no tengo datos del tinaco.'
+                )               
+               
             data = compute_alerts('enrique', devices['enrique'])
 
             edad = int(time.time()) - data["server_time"]
