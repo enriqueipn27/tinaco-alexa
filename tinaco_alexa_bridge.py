@@ -235,65 +235,89 @@ def alexa():
         req = request.get_json()
         print("DEVICES NOW:", devices)
         req_type = req['request']['type']
+        
+        if req_type == 'LaunchRequest':
+                    
+            if 'enrique' not in devices:
+                        
+                time.sleep(2)
 
-
-        if req_type == 'LaunchRequest':            
-            
-            if 'enrique' in devices:            
-                
                 if 'enrique' not in devices:
                     
+                            
+
                     return alexa_speak(
-                        'Todavía no tengo datos disponibles del tinaco.'
+                        'Estoy iniciando la conexión con el tinaco. Intenta nuevamente en unos segundos.'
                     )
-                data = compute_alerts('enrique', devices['enrique'])
-                edad = int(time.time()) - data["server_time"]
-                texto = (
-                    f"Bienvenido. "
-                    f"El tinaco está al {data['level']} por ciento "
-                    f"con aproximadamente {data['liters']} litros. "
-                    f"La última lectura fue recibida hace {edad} segundos. "
-                    f"{data['speech']} "
-                    f"¿Deseas consultar algo más?"
-                )
 
-                return alexa_speak(texto)
-            else:
-                
-                
+            data = compute_alerts('enrique', devices['enrique'])
 
-                return alexa_speak(
-                    'Bienvenido. Aún no tengo datos del tinaco.'
-                )
+            edad = int(time.time()) - data["server_time"]
+
+            texto = (
+                f"Bienvenido. "
+                f"El tinaco está al {data['level']} por ciento "
+                f"con aproximadamente {data['liters']} litros. "
+                f"La última lectura fue recibida hace {edad} segundos. "
+                f"{data['speech']} "
+                f"¿Deseas consultar algo más?"
+            )
+
+            return alexa_speak(texto)
+
+        if 'enrique' not in devices:
+
+            return alexa_speak(
+                'Todavía no tengo datos disponibles del tinaco.'
+            )
 
         data = compute_alerts('enrique', devices['enrique'])
 
         if req_type == 'IntentRequest':
+            
+
             intent = req['request']['intent']['name']
 
             if intent == 'NivelIntent':
+                
+
                 edad = int(time.time()) - data["server_time"]
+
                 texto = (
                     f"{data['speech']} "
                     f"El nivel actual es de {data['level']} por ciento, "
                     f"con aproximadamente {data['liters']} litros disponibles. "
                     f"La última lectura fue recibida hace {edad} segundos."
                 )
-                
-                
+
                 return alexa_speak(texto)
 
             if intent == 'EstadoIntent':
-                texto = f"{data['speech']} La altura del agua es de {data['height']} centímetros y la señal wifi es {data['rssi']} decibeles."
+
+                texto = (
+                    f"{data['speech']} "
+                    f"La altura del agua es de {data['height']} centímetros "
+                    f"y la señal wifi es {data['rssi']} decibeles."
+                )
+
                 return alexa_speak(texto)
 
-            if intent == 'AlertaIntent':
+            if intent == 'AlertaIntent': 
+
                 return alexa_speak(data['speech'])
 
-            if intent in ['AMAZON.StopIntent', 'AMAZON.CancelIntent', 'AMAZON.NavigateHomeIntent']:
+            if intent in [
+                'AMAZON.StopIntent',
+                'AMAZON.CancelIntent',
+                'AMAZON.NavigateHomeIntent'
+            ]:
+
                 return alexa_speak('Hasta luego.', True)
 
-        return alexa_speak('No entendí tu solicitud. Puedes preguntarme nivel, estado o alertas.')
+        return alexa_speak(
+            'No entendí tu solicitud. Puedes preguntarme nivel, estado o alertas.'
+        )
+
 
     except Exception as e:
         print('ALEXA ERROR:', e)
