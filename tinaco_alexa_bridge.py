@@ -3,6 +3,8 @@ import paho.mqtt.client as mqtt
 import json
 import threading
 import time
+import traceback
+
 
 #################################################
 # CONFIG
@@ -169,70 +171,89 @@ def alexa_test(device_id):
         f"La temperatura es "
         f"{d.get('t',0)} grados."
     )
-
+#######################################
 @app.route("/alexa", methods=["POST"])
 def alexa():
     
-    print("ALEXA REQUEST =", request.get_json())
-    if "enrique" not in devices:
+    try:
+        
+
+        print("ALEXA REQUEST =", request.get_json())
+
+        d = devices.get("enrique")
+
+        if d is None:
+
+            return jsonify({
+                "version": "1.0",
+                "response": {
+                    "outputSpeech": {
+                        "type": "PlainText",
+                        "text": "Aún no tengo datos del tinaco."
+                    },
+                    "shouldEndSession": True
+                }
+            })
+
+        c = controls.get("enrique", {})
+
+        # Bomba
+        if c.get("B", 0) == 1:
+            bomba = "encendida"
+        else:
+            bomba = "apagada"
+
+        # Válvula
+        if c.get("V", 0) == 1:
+            valvula = "abierta"
+        else:
+            valvula = "cerrada"
+
+        # Flotador
+        if d.get("fl", 0) == 1:
+            flotador = "cerrado y el tinaco está lleno"
+        else:
+            flotador = "abierto"
+
+        texto = (
+            f"El tinaco está al "
+            f"{d.get('lvl',0)} por ciento, "
+            f"con aproximadamente "
+            f"{d.get('l',0)} litros. "
+            f"La temperatura es "
+            f"{d.get('t',0)} grados. "
+            f"La bomba está {bomba}. "
+            f"La válvula está {valvula}. "
+            f"El flotador está {flotador}."
+        )
 
         return jsonify({
             "version": "1.0",
             "response": {
                 "outputSpeech": {
                     "type": "PlainText",
-                    "text": "Aún no tengo datos del tinaco."
+                    "text": texto
                 },
                 "shouldEndSession": True
             }
         })
 
-    d = devices["enrique"]
+    except Exception:
 
-    c = controls.get("enrique", {})
+        print("========== ALEXA ERROR ==========")
+        traceback.print_exc()
+        print("=================================")
 
-    # Bomba
-    if c.get("B", 0) == 1:
-        bomba = "encendida"
-    else:
-        bomba = "apagada"
-
-    # Válvula
-    if c.get("V", 0) == 1:
-        valvula = "abierta"
-    else:
-        valvula = "cerrada"
-
-
-    # Flotador
-    if d.get("fl",0) == 1:
-        flotador = "cerrado y el tinaco está lleno"
-    else:
-        flotador = "abierto"
-        
-    texto = (
-    f"El tinaco está al "
-    f"{d.get('lvl',0)} por ciento, "
-    f"con aproximadamente "
-    f"{d.get('l',0)} litros. "
-    f"La temperatura es "
-    f"{d.get('t',0)} grados. "
-    f"La bomba está {bomba}. "
-    f"La válvula está {valvula}. "
-    f"El flotador está {flotador}."
-    )    
-
-
-    return jsonify({
-        "version": "1.0",
-        "response": {
-            "outputSpeech": {
-                "type": "PlainText",
-                "text": texto
-            },
-            "shouldEndSession": True
-        }
-    })
+        return jsonify({
+            "version": "1.0",
+            "response": {
+                "outputSpeech": {
+                    "type": "PlainText",
+                    "text": "Ocurrió un error temporal."
+                },
+                "shouldEndSession": True
+            }
+        })
 #################################################
 # LOCAL TEST
 #################################################
@@ -243,4 +264,3 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=10000
     )
-
