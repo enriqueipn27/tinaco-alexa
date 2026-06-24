@@ -23,6 +23,11 @@ app = Flask(__name__)
 devices = {}
 controls = {}
 mqtt_client = None
+last_B = None
+last_fl = None
+last_low55 = False
+
+####################################################
 TELEGRAM_TOKEN = "8771876521:AAGVjwYWQ4fkjvFakbKxs3jzLnKbaKgrSWQ"
 TELEGRAM_CHAT_ID = 8660553595
 #################################################
@@ -37,7 +42,7 @@ def send_telegram(msg):
             f"/sendMessage"
         )
 
-        requests.post(
+        r = requests.post(
             url,
             json={
                 "chat_id": TELEGRAM_CHAT_ID,
@@ -46,7 +51,8 @@ def send_telegram(msg):
             timeout=10
         )
 
-        print("TELEGRAM OK")
+        print("TELEGRAM STATUS =", r.status_code)
+        print("TELEGRAM RESPONSE =", r.text)
 
     except Exception as e:
 
@@ -75,6 +81,9 @@ def on_message(client, userdata, msg):
 
     global devices
     global controls
+    global last_B
+    global last_fl
+    global last_low55
 
     try:
 
@@ -89,6 +98,45 @@ def on_message(client, userdata, msg):
 
             devices[device_id] = payload
             devices[device_id]["server_time"] = int(time.time())
+            global last_fl
+            global last_low55
+
+            # SOLO ENRIQUE POR AHORA
+            if device_id == "enrique":
+
+                fl = payload.get("fl", 0)
+                lvl = payload.get("lvl", 0)
+
+                # Tinaco lleno
+                if last_fl is not None:
+
+                    if last_fl == 0 and fl == 1:
+                        send_telegram(
+                            f"✅ Tinaco Enrique lleno\n"
+                            f"🚪 Flotador cerrado\n"
+                            f"💧 {payload.get('l',0)} litros\n"
+                            f"🌡️ {payload.get('t',0)} °C"
+                        )
+
+
+                last_fl = fl
+
+                # Nivel bajo
+                if lvl < 55:
+
+                    if not last_low55:
+
+                        send_telegram(
+                            f"⚠️ Tinaco Enrique por debajo del 55%\n"
+                            f"Nivel: {lvl}%\n"
+                            f"Litros: {payload.get('l',0)}"
+                        )
+
+                        last_low55 = True
+
+                else:
+
+                    last_low55 = False
 
             print("STATUS UPDATE:", device_id)
 
@@ -102,12 +150,33 @@ def on_message(client, userdata, msg):
                 device_id = partes[1].lower()
 
                 controls[device_id] = payload
+                global last_B
+
+                if device_id == "enrique":
+
+                    B = payload.get("B", 0)
+
+                    if last_B is not None:
+
+                        if last_B == 0 and B == 1:
+
+                            send_telegram(
+                                "🔄 Bomba encendida"
+                            )
+
+                        elif last_B == 1 and B == 0:
+
+                            send_telegram(
+                                "⏹️ Bomba apagada"
+                            )
+
+                    last_B = B
 
                 print("CONTROL UPDATE:", device_id, payload)
 
     except Exception as e:
 
-        print("MQTT ERROR:", e)
+         print("MQTT ERROR:", e)
 
 
 #################################################
@@ -301,5 +370,4 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=10000
     )
-
 
