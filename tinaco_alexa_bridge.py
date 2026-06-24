@@ -29,8 +29,8 @@ last_fl = None
 last_low55 = False
 
 ####################################################
-TELEGRAM_TOKEN = "8771876521:AAGqVh5HsYn4KNES53DTTKnftKOuWMaRbnQ"
 
+TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 TELEGRAM_CHAT_ID = 8660553595
 #################################################
 #  telegram
