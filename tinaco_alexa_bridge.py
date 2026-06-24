@@ -110,7 +110,7 @@ def compute_alerts(device_id, data):
 #################################################
 def on_connect(client, userdata, flags, rc):
     global mqtt_last_rx
-    print("MQTT CONNECT CALLBACK RC=", rc)
+    print("ON_CONNECT RC=", rc)
     client.subscribe(MQTT_TOPIC)
     mqtt_last_rx = int(time.time())
 
@@ -150,10 +150,14 @@ def start_mqtt_client():
     global mqtt_client
     try:
         print("MQTT CONNECTING TO", MQTT_BROKER)
-        mqtt_client = mqtt.Client()
+           
+        mqtt_client = mqtt.Client(
+            callback_api_version=mqtt.CallbackAPIVersion.VERSION1
+        )
         mqtt_client.on_connect = on_connect
         mqtt_client.on_message = on_message
         mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
+        print("CONNECT RETURNED OK")
         mqtt_client.loop_start()
         print("MQTT LOOP STARTED")
     except Exception as e:
