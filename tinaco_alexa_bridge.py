@@ -401,5 +401,5 @@ def validate():
 
 ensure_mqtt_started()
 @app.route('/')
-que cambio y en donde?def home():
+def home():
     return 'Mi Tinaco Render FailSoft V3 Alexa activo'
