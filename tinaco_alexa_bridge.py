@@ -110,7 +110,7 @@ def compute_alerts(device_id, data):
 #################################################
 def on_connect(client, userdata, flags, rc):
     global mqtt_last_rx
-    print("MQTT connected:", rc)
+    print("MQTT CONNECT CALLBACK RC=", rc)
     client.subscribe(MQTT_TOPIC)
     mqtt_last_rx = int(time.time())
 
@@ -149,6 +149,7 @@ def on_message(client, userdata, msg):
 def start_mqtt_client():
     global mqtt_client
     try:
+        print("MQTT CONNECTING TO", MQTT_BROKER)
         mqtt_client = mqtt.Client()
         mqtt_client.on_connect = on_connect
         mqtt_client.on_message = on_message
@@ -240,7 +241,11 @@ def alexa():
             
             if 'enrique' in devices:            
                 
-
+                if 'enrique' not in devices:
+                    
+                    return alexa_speak(
+                        'Todavía no tengo datos disponibles del tinaco.'
+                    )
                 data = compute_alerts('enrique', devices['enrique'])
                 edad = int(time.time()) - data["server_time"]
                 texto = (
@@ -349,7 +354,6 @@ def validate():
 #################################################
 
 ensure_mqtt_started()
-
 @app.route('/')
 def home():
     return 'Mi Tinaco Render FailSoft V3 Alexa activo'
