@@ -344,6 +344,11 @@ def validate():
     if token in access_tokens:
         return jsonify({"valid": True, "user": access_tokens[token]["user"]})
     return jsonify({"valid": False}), 401
+#################################################
+# START MQTT AT BOOT
+#################################################
+
+ensure_mqtt_started()
 
 @app.route('/')
 def home():
