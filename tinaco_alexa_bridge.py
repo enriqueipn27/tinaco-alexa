@@ -4,7 +4,7 @@ import json
 import threading
 import time
 import traceback
-
+import requests
 
 #################################################
 # CONFIG
@@ -23,6 +23,35 @@ app = Flask(__name__)
 devices = {}
 controls = {}
 mqtt_client = None
+TELEGRAM_TOKEN = "8771876521:AAGVjwYWQ4fkjvFakbKxs3jzLnKbaKgrSWQ"
+TELEGRAM_CHAT_ID = 8660553595
+#################################################
+#  telegram
+#################################################
+def send_telegram(msg):
+
+    try:
+
+        url = (
+            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
+            f"/sendMessage"
+        )
+
+        requests.post(
+            url,
+            json={
+                "chat_id": TELEGRAM_CHAT_ID,
+                "text": msg
+            },
+            timeout=10
+        )
+
+        print("TELEGRAM OK")
+
+    except Exception as e:
+
+        print("TELEGRAM ERROR:", e)
+
 
 #################################################
 # MQTT CALLBACKS
@@ -137,6 +166,12 @@ def debug():
 
     return jsonify(devices)
 
+@app.route("/telegram_test")
+def telegram_test():
+
+    send_telegram("🚰 Proyecto Tinaco conectado")
+
+    return "TELEGRAM ENVIADO"
 
 @app.route("/estado/<device_id>")
 def estado(device_id):
@@ -254,6 +289,8 @@ def alexa():
                 "shouldEndSession": True
             }
         })
+    
+
 #################################################
 # LOCAL TEST
 #################################################
@@ -264,3 +301,5 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=10000
     )
+
+
