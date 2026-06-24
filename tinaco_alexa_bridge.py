@@ -10,15 +10,16 @@ import time
 
 MQTT_BROKER = "broker.hivemq.com"
 MQTT_PORT = 1883
-MQTT_TOPIC = "tinaco/+/status"
 
+TOPIC_STATUS = "tinaco/+/status"
+TOPIC_CONTROL = "calle/+/control"
 #################################################
 # GLOBALS
 #################################################
 
 app = Flask(__name__)
-
 devices = {}
+controls = {}
 mqtt_client = None
 
 #################################################
@@ -29,19 +30,20 @@ def on_connect(client, userdata, flags, rc):
 
     print("MQTT CONNECTED RC =", rc)
 
-    client.subscribe(MQTT_TOPIC)
+    client.subscribe(TOPIC_STATUS)
+    client.subscribe(TOPIC_CONTROL)
 
-    print("SUBSCRIBED TO:", MQTT_TOPIC)
-
+    print("SUBSCRIBED TO:", TOPIC_STATUS)
+    print("SUBSCRIBED TO:", TOPIC_CONTROL)
 
 def on_disconnect(client, userdata, rc):
 
     print("MQTT DISCONNECTED RC =", rc)
 
-
 def on_message(client, userdata, msg):
 
     global devices
+    global controls
 
     try:
 
@@ -49,17 +51,33 @@ def on_message(client, userdata, msg):
 
         payload = json.loads(msg.payload.decode())
 
-        device_id = payload.get("id", "").lower()
+        # tinaco/enrique/status
+        if "/status" in msg.topic:
 
-        devices[device_id] = payload
+            device_id = payload.get("id","").lower()
 
-        devices[device_id]["server_time"] = int(time.time())
+            devices[device_id] = payload
+            devices[device_id]["server_time"] = int(time.time())
 
-        print("MQTT UPDATE:", device_id)
+            print("STATUS UPDATE:", device_id)
+
+        # calle/enrique/control
+        elif "/control" in msg.topic:
+
+            partes = msg.topic.split("/")
+
+            if len(partes) >= 3:
+
+                device_id = partes[1].lower()
+
+                controls[device_id] = payload
+
+                print("CONTROL UPDATE:", device_id, payload)
 
     except Exception as e:
 
         print("MQTT ERROR:", e)
+
 
 #################################################
 # MQTT START
@@ -171,14 +189,39 @@ def alexa():
 
     d = devices["enrique"]
 
+    c = controls.get("enrique", {})
+
+    # Bomba
+    if c.get("B", 0) == 1:
+        bomba = "encendida"
+    else:
+        bomba = "apagada"
+
+    # Válvula
+    if c.get("V", 0) == 1:
+        valvula = "abierta"
+    else:
+        valvula = "cerrada"
+
+
+    # Flotador
+    if d.get("fl",0) == 1:
+        flotador = "cerrado y el tinaco está lleno"
+    else:
+        flotador = "abierto"
+        
     texto = (
-        f"El tinaco está al "
-        f"{d.get('lvl',0)} por ciento, "
-        f"con aproximadamente "
-        f"{d.get('l',0)} litros. "
-        f"La temperatura es "
-        f"{d.get('t',0)} grados."
-    )
+    f"El tinaco está al "
+    f"{d.get('lvl',0)} por ciento, "
+    f"con aproximadamente "
+    f"{d.get('l',0)} litros. "
+    f"La temperatura es "
+    f"{d.get('t',0)} grados. "
+    f"La bomba está {bomba}. "
+    f"La válvula está {valvula}. "
+    f"El flotador está {flotador}."
+    )    
+
 
     return jsonify({
         "version": "1.0",
@@ -200,5 +243,4 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=10000
     )
-
 
