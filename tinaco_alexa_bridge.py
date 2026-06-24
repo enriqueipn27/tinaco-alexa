@@ -147,7 +147,9 @@ def on_message(client, userdata, msg):
 # MQTT SERVICE START
 #################################################
 def start_mqtt_client():
-    global mqtt_client
+    global mqtt_client,mqtt_boot_time
+    mqtt_boot_time = int(time.time())
+    print("MQTT BOOT TIME RESET")
     try:
         print("MQTT CONNECTING TO", MQTT_BROKER)
            
@@ -160,6 +162,8 @@ def start_mqtt_client():
         print("CONNECT RETURNED OK")
         mqtt_client.loop_start()
         print("MQTT LOOP STARTED")
+        time.sleep(5)
+        print("MQTT CONNECTED =", mqtt_client.is_connected())
     except Exception as e:
         print("MQTT START ERROR:", e)
 
