@@ -29,7 +29,8 @@ last_fl = None
 last_low55 = False
 
 ####################################################
-TELEGRAM_TOKEN = "8771876521:AAGVjwYWQ4fkjvFakbKxs3jzLnKbaKgrSWQ"
+TELEGRAM_TOKEN = "8771876521:AAGqVh5HsYn4KNES53DTTKnftKOuWMaRbnQ"
+
 TELEGRAM_CHAT_ID = 8660553595
 #################################################
 #  telegram
@@ -82,6 +83,11 @@ def on_message(client, userdata, msg):
 
     global devices
     global controls
+    global last_B
+    global last_fl
+    global last_low55
+
+    
     print("MQTT PID =", os.getpid())
 
 
@@ -147,7 +153,7 @@ def on_message(client, userdata, msg):
                 device_id = partes[1].lower()
 
                 controls[device_id] = payload
-                global last_B
+                
 
                 if device_id == "enrique":
 
