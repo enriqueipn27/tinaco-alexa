@@ -167,8 +167,16 @@ def start_mqtt_client():
         print("CONNECT RETURNED OK")
         mqtt_client.loop_start()
         print("MQTT LOOP STARTED")
-        time.sleep(5)
-        print("MQTT CONNECTED =", mqtt_client.is_connected())
+        for i in range(15):
+            
+            time.sleep(1)
+            print(
+                "WAIT",
+                i,
+                "CONNECTED=",
+                mqtt_client.is_connected()
+            )
+                
     except Exception as e:
         print("MQTT START ERROR:", e)
 
