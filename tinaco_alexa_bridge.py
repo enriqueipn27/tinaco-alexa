@@ -1,405 +1,147 @@
-from flask import Flask, request, jsonify, redirect
+```python
+from flask import Flask, jsonify
 import paho.mqtt.client as mqtt
 import json
 import threading
 import time
-import uuid
-import os
 
-app = Flask(__name__)
-mqtt_started = False
+#################################################
+# CONFIG
+#################################################
+
 MQTT_BROKER = "broker.hivemq.com"
 MQTT_PORT = 1883
 MQTT_TOPIC = "tinaco/+/status"
-STORE_FILE = "devices_store.json"
 
-VALID_CLIENT_ID = "abc123"
-VALID_CLIENT_SECRET = "tinaco2026secure"
-VALID_SCOPE = "tinaco_control"
+#################################################
+# GLOBALS
+#################################################
+
+app = Flask(__name__)
 
 devices = {}
-auth_codes = {}
-access_tokens = {}
-refresh_tokens = {}
-last_alerts = {}
-mqtt_last_rx = int(time.time())
-mqtt_boot_time = int(time.time())
 mqtt_client = None
-
-#################################################
-# LOAD SAVE
-#################################################
-def load_store():
-    global devices,last_alerts
-    if os.path.exists(STORE_FILE):
-        try:
-            with open(STORE_FILE, "r") as f:
-                pack = json.load(f)
-                devices = pack.get("devices", {})
-                last_alerts = pack.get("alerts", {})
-        except:
-            devices = {}
-            last_alerts = {}
-
-def save_store():
-    try:
-        with open(STORE_FILE, "w") as f:
-            json.dump({"devices": devices, "alerts": last_alerts}, f)
-    except:
-        pass
-
-load_store()
-
-#################################################
-# ALERT ENGINE
-#################################################
-def compute_alerts(device_id, data):
-    level = data.get("level",0)
-    overflow = data.get("overflow",0)
-    age = int(time.time()) - data.get("server_time",0)
-
-    low = level < 20
-    critical = level < 10
-    over = overflow == 1
-    lost = age > 25
-    stale = age > 12 and age <= 25
-    fresh = age <= 12
-
-    previous = last_alerts.get(device_id,{})
-    recover = False
-
-    if previous.get("low") and level >= 25:
-        recover = True
-    if previous.get("lost") and age <= 12:
-        recover = True
-
-    speech = "Sistema operando normalmente."
-
-    if critical:
-        speech = "Atención. El nivel de agua es crítico."
-    elif low:
-        speech = "Aviso. El nivel de agua está bajo."
-    elif over:
-        speech = "Atención. Se detecta posible derrame en el tinaco."
-    elif lost:
-        speech = "La comunicación con el sensor está demorada, pero conservo la última lectura disponible."
-    elif stale:
-        speech = "La última lectura está ligeramente retrasada, pero el sistema sigue monitoreando."
-    elif recover:
-        speech = "El sistema reporta recuperación a estado normal."
-
-    last_alerts[device_id] = {
-        "low": low,
-        "critical": critical,
-        "overflow": over,
-        "lost": lost,
-        "recover": recover
-    }
-
-    data["freshness"] = "FRESH" if fresh else "STALE" if stale else "LOST"
-    data["alert_low"] = low
-    data["alert_critical"] = critical
-    data["alert_overflow"] = over
-    data["alert_lost"] = lost
-    data["alert_recover"] = recover
-    data["speech"] = speech
-    return data
 
 #################################################
 # MQTT CALLBACKS
 #################################################
+
 def on_connect(client, userdata, flags, rc):
-    global mqtt_last_rx
-    print("ON_CONNECT RC=", rc)
-    print("SUCRITO A:",MQTT_TOPIC)
+
+    print("MQTT CONNECTED RC =", rc)
+
     client.subscribe(MQTT_TOPIC)
-    mqtt_last_rx = int(time.time())
+
+    print("SUBSCRIBED TO:", MQTT_TOPIC)
+
+
+def on_disconnect(client, userdata, rc):
+
+    print("MQTT DISCONNECTED RC =", rc)
+
 
 def on_message(client, userdata, msg):
-    global devices,mqtt_last_rx
+
+    global devices
+
     try:
-        mqtt_last_rx = int(time.time())
+
         print("TOPIC RX:", msg.topic)
-        print("RETAIN =", msg.retain)
+
         payload = json.loads(msg.payload.decode())
-        topic_parts = msg.topic.split("/")
-        device_id = topic_parts[1].lower()
 
-        devices[device_id] = {
-            "device": device_id,
-            "level": payload.get("lvl", 0),
-            "height": payload.get("h", 0),
-            "liters": payload.get("l", 0),
-            "pump": payload.get("pump", "OFF"),
-            "rssi": payload.get("r", 0),
-            "flow": payload.get("f", 0),
-            "freq": payload.get("fq", 0),
-            "overflow": payload.get("ov", 0),
-            "time": payload.get("ts", int(time.time())),
-            "server_time": int(time.time())
-        }
+        device_id = payload.get("id", "").lower()
 
-        compute_alerts(device_id, devices[device_id])
-        #save_store()
-        print("MQTT UPDATE", device_id, devices[device_id])
+        devices[device_id] = payload
+
+        devices[device_id]["server_time"] = int(time.time())
+
+        print("MQTT UPDATE:", device_id)
 
     except Exception as e:
+
         print("MQTT ERROR:", e)
 
 #################################################
-# MQTT SERVICE START
+# MQTT START
 #################################################
-def start_mqtt_client():
-    global mqtt_client,mqtt_boot_time
-    mqtt_boot_time = int(time.time())
-   
-    #print("MQTT BOOT TIME RESET")
+
+def start_mqtt():
+
+    global mqtt_client
+
     try:
-        print("MQTT CONNECTING TO", MQTT_BROKER)
-           
+
         mqtt_client = mqtt.Client(
             callback_api_version=mqtt.CallbackAPIVersion.VERSION1
         )
-        print("MQTT CLIENT ID:", id(mqtt_client))
+
         mqtt_client.on_connect = on_connect
         mqtt_client.on_message = on_message
-        def on_disconnect(client, userdata, rc):
-            
-            print("MQTT DISCONNECTED RC=", rc)
-
         mqtt_client.on_disconnect = on_disconnect
-        
+
+        print("CONNECTING TO", MQTT_BROKER)
+
         mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
-        print("CONNECT RETURNED OK")
+
         mqtt_client.loop_start()
+
         print("MQTT LOOP STARTED")
-        for i in range(15):
-            
-            time.sleep(1)
-            print(
-                "WAIT",
-                i,
-                "CONNECTED=",
-                mqtt_client.is_connected()
-            )
-                
+
     except Exception as e:
+
         print("MQTT START ERROR:", e)
 
-#def mqtt_watchdog():
-#    global mqtt_client,mqtt_last_rx
-#    while True:
-#        try:
-#            boot_age = int(time.time()) - mqtt_boot_time
-#            age = int(time.time()) - mqtt_last_rx
-#            if boot_age > 40 and age > 25:
-#                print("MQTT WATCHDOG RECONNECT")
-#                try:
-#                    mqtt_client.loop_stop()
-#                    mqtt_client.disconnect()
-#                except:
-#                    pass
-#                start_mqtt_client()
-#            time.sleep(5)
-#        except Exception as e:
-#            print("WATCHDOG ERROR:", e)
-#            time.sleep(5)
 #################################################
-# WORKER SAFE MQTT INIT
-#################################################
-def ensure_mqtt_started():
-    global mqtt_started
-    print("MQTT STARTED =", mqtt_started)
-    if not mqtt_started:
-        print("STARTING MQTT INSIDE WORKER")
-        start_mqtt_client()
-#        threading.Thread(target=mqtt_watchdog, daemon=True).start()
-        mqtt_started = True
-
-#################################################
-# ALEXA RESPONSE HELPER
-#################################################
-def alexa_speak(text, end=False):
-
-    return jsonify({
-        "version": "1.0",
-        "sessionAttributes": {},
-        "response": {
-            "outputSpeech": {
-                "type": "PlainText",
-                "text": text
-            },
-            "shouldEndSession": end
-        }
-    })
-
-#################################################
-# API
-#################################################
-@app.route('/api/<device_id>')
-def api_device(device_id):
-    ensure_mqtt_started()
-    device_id = device_id.lower()
-    if device_id not in devices:
-        return jsonify({"device": device_id,"status": "NO_DATA","speech": "Todavía no tengo historial suficiente de este tinaco."})
-    return jsonify(compute_alerts(device_id, devices[device_id]))
-
-@app.route('/debug')
-def debug():
-        ensure_mqtt_started()
-        out = {}
-        for d in devices:
-            out[d] = compute_alerts(d, devices[d])
-        return jsonify(out)
-
-#################################################
-# ALEXA CUSTOM SKILL ENDPOINT
-#################################################
-@app.route('/alexa', methods=['POST'])
-def alexa():
-    
-    try:
-        ensure_mqtt_started()
-        req = request.get_json()
-        print("DEVICES NOW:", devices)
-        req_type = req['request']['type']
-        
-        if req_type == 'LaunchRequest':
-                    
-            if 'enrique' not in devices:
-                
-                return alexa_speak(
-            'Aún no tengo datos del tinaco.'
-                )               
-               
-            data = compute_alerts('enrique', devices['enrique'])
-
-            edad = int(time.time()) - data["server_time"]
-
-            texto = (
-                f"Bienvenido. "
-                f"El tinaco está al {data['level']} por ciento "
-                f"con aproximadamente {data['liters']} litros. "
-                f"La última lectura fue recibida hace {edad} segundos. "
-                f"{data['speech']} "
-                f"¿Deseas consultar algo más?"
-            )
-
-            return alexa_speak(texto)
-
-        if 'enrique' not in devices:
-
-            return alexa_speak(
-                'Todavía no tengo datos disponibles del tinaco.'
-            )
-
-        data = compute_alerts('enrique', devices['enrique'])
-
-        if req_type == 'IntentRequest':
-            
-
-            intent = req['request']['intent']['name']
-
-            if intent == 'NivelIntent':
-                
-
-                edad = int(time.time()) - data["server_time"]
-
-                texto = (
-                    f"{data['speech']} "
-                    f"El nivel actual es de {data['level']} por ciento, "
-                    f"con aproximadamente {data['liters']} litros disponibles. "
-                    f"La última lectura fue recibida hace {edad} segundos."
-                )
-
-                return alexa_speak(texto)
-
-            if intent == 'EstadoIntent':
-
-                texto = (
-                    f"{data['speech']} "
-                    f"La altura del agua es de {data['height']} centímetros "
-                    f"y la señal wifi es {data['rssi']} decibeles."
-                )
-
-                return alexa_speak(texto)
-
-            if intent == 'AlertaIntent': 
-
-                return alexa_speak(data['speech'])
-
-            if intent in [
-                'AMAZON.StopIntent',
-                'AMAZON.CancelIntent',
-                'AMAZON.NavigateHomeIntent'
-            ]:
-
-                return alexa_speak('Hasta luego.', True)
-
-        return alexa_speak(
-            'No entendí tu solicitud. Puedes preguntarme nivel, estado o alertas.'
-        )
-
-
-    except Exception as e:
-        print('ALEXA ERROR:', e)
-        return alexa_speak('Ocurrió una falla temporal en mi tinaco.')
-
-
-#################################################
-# OAUTH
-#################################################
-@app.route('/auth')
-def auth():
-    redirect_uri = request.args.get("redirect_uri")
-    state = request.args.get("state")
-    client_id = request.args.get("client_id")
-    scope = request.args.get("scope")
-    if client_id != VALID_CLIENT_ID or scope != VALID_SCOPE:
-        return "unauthorized", 401
-    auth_code = str(uuid.uuid4())
-    auth_codes[auth_code] = {"client_id": client_id,"created": time.time(),"user": "enrique"}
-    return redirect(f"{redirect_uri}?state={state}&code={auth_code}")
-
-@app.route('/token', methods=['POST'])
-def token():
-    grant_type = request.form.get("grant_type")
-    code = request.form.get("code")
-    refresh = request.form.get("refresh_token")
-    client_id = request.form.get("client_id")
-    client_secret = request.form.get("client_secret")
-    if client_id != VALID_CLIENT_ID or client_secret != VALID_CLIENT_SECRET:
-        return jsonify({"error": "invalid_client"}), 401
-
-    if grant_type == "authorization_code":
-        if code not in auth_codes:
-            return jsonify({"error": "invalid_grant"}), 400
-        access_token = str(uuid.uuid4())
-        refresh_token = str(uuid.uuid4())
-        access_tokens[access_token] = {"user": "enrique", "created": time.time()}
-        refresh_tokens[refresh_token] = {"user": "enrique", "created": time.time()}
-        return jsonify({"access_token": access_token,"token_type": "Bearer","expires_in": 86400,"refresh_token": refresh_token})
-
-    elif grant_type == "refresh_token":
-        if refresh not in refresh_tokens:
-            return jsonify({"error": "invalid_refresh"}), 400
-        new_access = str(uuid.uuid4())
-        access_tokens[new_access] = {"user": "enrique", "created": time.time()}
-        return jsonify({"access_token": new_access,"token_type": "Bearer","expires_in": 86400,"refresh_token": refresh})
-
-    return jsonify({"error": "unsupported_grant_type"}), 400
-
-@app.route('/validate')
-def validate():
-    token = request.args.get("token")
-    if token in access_tokens:
-        return jsonify({"valid": True, "user": access_tokens[token]["user"]})
-    return jsonify({"valid": False}), 401
-#################################################
-# START MQTT AT BOOT
+# START MQTT THREAD
 #################################################
 
-ensure_mqtt_started()
-@app.route('/')
+mqtt_thread = threading.Thread(
+    target=start_mqtt,
+    daemon=True
+)
+
+mqtt_thread.start()
+
+#################################################
+# ROUTES
+#################################################
+
+@app.route("/")
 def home():
-    return 'Mi Tinaco Render FailSoft V3 Alexa activo'
+
+    return "TINACO MQTT OK"
+
+
+@app.route("/debug")
+def debug():
+
+    return jsonify(devices)
+
+
+@app.route("/estado/<device_id>")
+def estado(device_id):
+
+    device_id = device_id.lower()
+
+    if device_id not in devices:
+
+        return jsonify({
+            "ok": False,
+            "msg": "device not found"
+        })
+
+    return jsonify(devices[device_id])
+
+
+#################################################
+# LOCAL TEST
+#################################################
+
+if __name__ == "__main__":
+
+    app.run(
+        host="0.0.0.0",
+        port=10000
+    )
+```
