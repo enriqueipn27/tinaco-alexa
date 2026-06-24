@@ -120,6 +120,7 @@ def on_message(client, userdata, msg):
     try:
         mqtt_last_rx = int(time.time())
         print("TOPIC RX:", msg.topic)
+        print("RETAIN =", msg.retain)
         payload = json.loads(msg.payload.decode())
         topic_parts = msg.topic.split("/")
         device_id = topic_parts[1].lower()
@@ -139,7 +140,7 @@ def on_message(client, userdata, msg):
         }
 
         compute_alerts(device_id, devices[device_id])
-        save_store()
+        #save_store()
         print("MQTT UPDATE", device_id, devices[device_id])
 
     except Exception as e:
@@ -151,13 +152,15 @@ def on_message(client, userdata, msg):
 def start_mqtt_client():
     global mqtt_client,mqtt_boot_time
     mqtt_boot_time = int(time.time())
-    print("MQTT BOOT TIME RESET")
+   
+    #print("MQTT BOOT TIME RESET")
     try:
         print("MQTT CONNECTING TO", MQTT_BROKER)
            
         mqtt_client = mqtt.Client(
             callback_api_version=mqtt.CallbackAPIVersion.VERSION1
         )
+        print("MQTT CLIENT ID:", id(mqtt_client))
         mqtt_client.on_connect = on_connect
         mqtt_client.on_message = on_message
         mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
@@ -169,33 +172,34 @@ def start_mqtt_client():
     except Exception as e:
         print("MQTT START ERROR:", e)
 
-def mqtt_watchdog():
-    global mqtt_client,mqtt_last_rx
-    while True:
-        try:
-            boot_age = int(time.time()) - mqtt_boot_time
-            age = int(time.time()) - mqtt_last_rx
-            if boot_age > 40 and age > 25:
-                print("MQTT WATCHDOG RECONNECT")
-                try:
-                    mqtt_client.loop_stop()
-                    mqtt_client.disconnect()
-                except:
-                    pass
-                start_mqtt_client()
-            time.sleep(5)
-        except Exception as e:
-            print("WATCHDOG ERROR:", e)
-            time.sleep(5)
+#def mqtt_watchdog():
+#    global mqtt_client,mqtt_last_rx
+#    while True:
+#        try:
+#            boot_age = int(time.time()) - mqtt_boot_time
+#            age = int(time.time()) - mqtt_last_rx
+#            if boot_age > 40 and age > 25:
+#                print("MQTT WATCHDOG RECONNECT")
+#                try:
+#                    mqtt_client.loop_stop()
+#                    mqtt_client.disconnect()
+#                except:
+#                    pass
+#                start_mqtt_client()
+#            time.sleep(5)
+#        except Exception as e:
+#            print("WATCHDOG ERROR:", e)
+#            time.sleep(5)
 #################################################
 # WORKER SAFE MQTT INIT
 #################################################
 def ensure_mqtt_started():
     global mqtt_started
+    print("MQTT STARTED =", mqtt_started)
     if not mqtt_started:
         print("STARTING MQTT INSIDE WORKER")
         start_mqtt_client()
-        threading.Thread(target=mqtt_watchdog, daemon=True).start()
+#        threading.Thread(target=mqtt_watchdog, daemon=True).start()
         mqtt_started = True
 
 #################################################
