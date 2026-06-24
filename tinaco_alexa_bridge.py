@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 import paho.mqtt.client as mqtt
 import json
 import threading
@@ -131,8 +131,9 @@ def estado(device_id):
         })
 
     return jsonify(devices[device_id])
-    
+
 @app.route("/alexa_test/<device_id>")
+
 def alexa_test(device_id):
 
     device_id = device_id.lower()
@@ -151,6 +152,44 @@ def alexa_test(device_id):
         f"{d.get('t',0)} grados."
     )
 
+@app.route("/alexa", methods=["POST"])
+def alexa():
+    
+    print("ALEXA REQUEST =", request.get_json())
+    if "enrique" not in devices:
+
+        return jsonify({
+            "version": "1.0",
+            "response": {
+                "outputSpeech": {
+                    "type": "PlainText",
+                    "text": "Aún no tengo datos del tinaco."
+                },
+                "shouldEndSession": True
+            }
+        })
+
+    d = devices["enrique"]
+
+    texto = (
+        f"El tinaco está al "
+        f"{d.get('lvl',0)} por ciento, "
+        f"con aproximadamente "
+        f"{d.get('l',0)} litros. "
+        f"La temperatura es "
+        f"{d.get('t',0)} grados."
+    )
+
+    return jsonify({
+        "version": "1.0",
+        "response": {
+            "outputSpeech": {
+                "type": "PlainText",
+                "text": texto
+            },
+            "shouldEndSession": True
+        }
+    })
 #################################################
 # LOCAL TEST
 #################################################
@@ -161,4 +200,5 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=10000
     )
+
 
